@@ -17,19 +17,31 @@ final class AppContainer: ObservableObject {
     @Published private(set) var isTransportBusy = false
 
     let playbackController = VLCPlaybackController()
+    let archivePreviewController: ArchivePreviewController
+    let frameCacheRecorder: FrameCacheRecorder
 
     private let stepResolver = ArchiveStepResolver(liveSnapInterval: 3)
+    private let continuationResolver = ArchiveContinuationResolver(
+        minimumRemainingDuration: 0.5,
+        resumeOffset: 0.001
+    )
+    private let frameCacheStore: FrameCacheStore
 
     private let profileStore: ProfileStore
     private let credentialStore: CredentialStore
     private(set) var cameraClient: HikvisionClient?
     private var pausedLiveDate: Date?
-    private var liveArchiveRefreshTask: Task<Void, Never>?
+    private var archiveRefreshTask: Task<Void, Never>?
+    private var archiveContinuationTask: Task<Void, Never>?
 
     init(
         profileStore: ProfileStore = ProfileStore(),
         credentialStore: CredentialStore = KeychainCredentialStore()
     ) {
+        let frameCacheStore = FrameCacheStore()
+        self.frameCacheStore = frameCacheStore
+        archivePreviewController = ArchivePreviewController(store: frameCacheStore)
+        frameCacheRecorder = FrameCacheRecorder(store: frameCacheStore)
         self.profileStore = profileStore
         self.credentialStore = credentialStore
         profile = profileStore.load()
@@ -48,6 +60,10 @@ final class AppContainer: ObservableObject {
             return
         }
 
+        frameCacheRecorder.stop()
+        stopArchiveRefresh()
+        cancelArchiveContinuation()
+        archivePreviewController.cancelAndHide()
         connectionState = .checking
         let client = HikvisionClient(profile: profile, credentials: credentials)
 
@@ -69,6 +85,12 @@ final class AppContainer: ObservableObject {
             connectionState = .connected(identity)
             isReady = true
             playLive()
+            startArchiveRefresh()
+            frameCacheRecorder.start(
+                client: client,
+                profile: profile,
+                credentials: credentials
+            )
         } catch {
             let message = (error as? LocalizedError)?.errorDescription
                 ?? "Не удалось подключиться к камере."
@@ -77,8 +99,8 @@ final class AppContainer: ObservableObject {
     }
 
     func seek(to date: Date) {
+        cancelArchiveContinuation()
         pausedLiveDate = nil
-        stopLiveArchiveRefresh()
         if date >= Date().addingTimeInterval(-3) {
             playLive()
             return
@@ -91,13 +113,39 @@ final class AppContainer: ObservableObject {
 
         if let next = recordingSegments.first(where: { $0.start > date }) {
             playbackController.playArchive(segment: next, at: next.start)
+            return
+        }
+
+        isTransportBusy = true
+        Task { [weak self] in
+            guard let self else { return }
+            let segments = await self.refreshRecentRecordings(
+                from: date.addingTimeInterval(-120)
+            )
+            if let segment = segments.first(where: { $0.contains(date) }) {
+                self.playbackController.playArchive(segment: segment, at: date)
+            } else if let next = segments.first(where: { $0.start > date }) {
+                self.playbackController.playArchive(segment: next, at: next.start)
+            } else {
+                self.playLive()
+            }
+            self.isTransportBusy = false
         }
     }
 
+    func preview(at date: Date) {
+        if date >= Date().addingTimeInterval(-3) {
+            archivePreviewController.cancelAndHide()
+            return
+        }
+
+        archivePreviewController.request(at: date)
+    }
+
     func playLive() {
+        cancelArchiveContinuation()
         pausedLiveDate = nil
         playbackController.playLive()
-        startLiveArchiveRefresh()
     }
 
     func togglePlayback() {
@@ -124,7 +172,6 @@ final class AppContainer: ObservableObject {
         } else {
             pausedLiveDate = nil
         }
-        stopLiveArchiveRefresh()
         playbackController.pause()
     }
 
@@ -148,7 +195,6 @@ final class AppContainer: ObservableObject {
         }
 
         pausedLiveDate = nil
-        stopLiveArchiveRefresh()
         isTransportBusy = true
         Task { [weak self] in
             guard let self else { return }
@@ -209,9 +255,9 @@ final class AppContainer: ObservableObject {
         }
     }
 
-    private func startLiveArchiveRefresh() {
-        liveArchiveRefreshTask?.cancel()
-        liveArchiveRefreshTask = Task { [weak self] in
+    private func startArchiveRefresh() {
+        archiveRefreshTask?.cancel()
+        archiveRefreshTask = Task { [weak self] in
             while !Task.isCancelled {
                 do {
                     try await Task.sleep(nanoseconds: 15_000_000_000)
@@ -220,13 +266,6 @@ final class AppContainer: ObservableObject {
                 }
 
                 guard let self else { return }
-                guard
-                    case .live = self.playbackController.state,
-                    !self.playbackController.isPaused
-                else {
-                    return
-                }
-
                 _ = await self.refreshRecentRecordings(
                     from: Date().addingTimeInterval(-120)
                 )
@@ -234,29 +273,56 @@ final class AppContainer: ObservableObject {
         }
     }
 
-    private func stopLiveArchiveRefresh() {
-        liveArchiveRefreshTask?.cancel()
-        liveArchiveRefreshTask = nil
+    private func stopArchiveRefresh() {
+        archiveRefreshTask?.cancel()
+        archiveRefreshTask = nil
     }
 
     private func continueArchive() {
-        guard
-            case let .archive(date) = playbackController.state,
-            let currentIndex = recordingSegments.firstIndex(where: {
-                $0.start <= date && date <= $0.end
-            })
-        else {
+        guard case let .archive(endedAt) = playbackController.state else {
             playLive()
             return
         }
 
-        let nextIndex = recordingSegments.index(after: currentIndex)
-        guard recordingSegments.indices.contains(nextIndex) else {
-            playLive()
-            return
-        }
+        archiveContinuationTask?.cancel()
+        isTransportBusy = true
+        archiveContinuationTask = Task { [weak self] in
+            guard let self else { return }
+            defer {
+                self.isTransportBusy = false
+                self.archiveContinuationTask = nil
+            }
 
-        let next = recordingSegments[nextIndex]
-        playbackController.playArchive(segment: next, at: next.start)
+            for attempt in 0..<3 {
+                if attempt > 0 {
+                    do {
+                        try await Task.sleep(nanoseconds: 500_000_000)
+                    } catch {
+                        return
+                    }
+                }
+
+                let segments = await self.refreshRecentRecordings(
+                    from: endedAt.addingTimeInterval(-120)
+                )
+                guard !Task.isCancelled else { return }
+
+                if case let .archive(segment, date)? = self.continuationResolver.destination(
+                    after: endedAt,
+                    segments: segments
+                ) {
+                    self.playbackController.playArchive(segment: segment, at: date)
+                    return
+                }
+            }
+
+            self.playLive()
+        }
+    }
+
+    private func cancelArchiveContinuation() {
+        archiveContinuationTask?.cancel()
+        archiveContinuationTask = nil
+        isTransportBusy = false
     }
 }

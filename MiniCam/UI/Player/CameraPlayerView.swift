@@ -3,16 +3,27 @@ import SwiftUI
 struct CameraPlayerView: View {
     @EnvironmentObject private var container: AppContainer
     @ObservedObject var playback: VLCPlaybackController
+    @ObservedObject var preview: ArchivePreviewController
 
     @State private var selectedDate = Date()
     @State private var isScrubbing = false
     @State private var isTimelineExpanded = true
+    @State private var transitionBaselineID = 0
+    @State private var expectedTransitionID: Int?
+    @State private var isWaitingForPlaybackStart = false
+    @State private var transitionTimeoutTask: Task<Void, Never>?
 
     var body: some View {
         ZStack(alignment: .bottom) {
             Color.black.ignoresSafeArea()
+            VLCVideoSurface(videoView: container.frameCacheRecorder.videoView)
+                .frame(width: 1, height: 1)
+                .opacity(0.01)
+                .allowsHitTesting(false)
             VLCVideoSurface(videoView: playback.videoView)
                 .ignoresSafeArea()
+
+            previewOverlay
 
             VStack(spacing: 12) {
                 statusRow
@@ -30,6 +41,32 @@ struct CameraPlayerView: View {
             guard !isScrubbing else { return }
             selectedDate = date
         }
+        .onReceive(playback.$transitionID) { transitionID in
+            guard
+                isWaitingForPlaybackStart,
+                transitionID > transitionBaselineID
+            else {
+                return
+            }
+            expectedTransitionID = transitionID
+            isWaitingForPlaybackStart = false
+        }
+        .onReceive(playback.$readyTransitionID) { transitionID in
+            guard expectedTransitionID == transitionID else { return }
+            finishPreviewTransition()
+        }
+        .onChange(of: isTimelineExpanded) { expanded in
+            if !expanded {
+                transitionTimeoutTask?.cancel()
+                expectedTransitionID = nil
+                isWaitingForPlaybackStart = false
+                preview.cancelAndHide()
+            }
+        }
+        .onDisappear {
+            transitionTimeoutTask?.cancel()
+            preview.cancelAndHide()
+        }
     }
 
     private var statusRow: some View {
@@ -46,6 +83,7 @@ struct CameraPlayerView: View {
                 Spacer()
 
                 Button("В эфир") {
+                    beginPreviewTransitionIfNeeded()
                     container.playLive()
                 }
                 .buttonStyle(.borderedProminent)
@@ -85,8 +123,94 @@ struct CameraPlayerView: View {
             isExpanded: isTimelineExpanded,
             range: timelineStart...timelineEnd,
             segments: container.recordingSegments,
-            onCommit: container.seek
+            onPreview: container.preview,
+            onCommit: { date in
+                beginPreviewTransitionIfNeeded()
+                container.seek(to: date)
+            }
         )
+    }
+
+    @ViewBuilder
+    private var previewOverlay: some View {
+        if preview.isVisible, let image = preview.image {
+            ZStack(alignment: .top) {
+                Color.black
+                    .ignoresSafeArea()
+
+                Image(nsImage: image)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                if let date = preview.imageDate {
+                    VStack(spacing: 3) {
+                        Text(date.formatted(date: .abbreviated, time: .standard))
+                            .font(.system(size: 12, weight: .bold, design: .monospaced))
+                        Text("кадр из локального кэша")
+                            .font(.system(size: 9, weight: .medium, design: .monospaced))
+                    }
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 7)
+                    .background(.black.opacity(0.68), in: RoundedRectangle(cornerRadius: 7))
+                    .padding(.top, 14)
+                }
+            }
+            .ignoresSafeArea()
+            .allowsHitTesting(false)
+            .transition(.opacity)
+        } else if preview.isUnavailable {
+            VStack(spacing: 4) {
+                Text("ПРЕДПРОСМОТР ЕЩЁ НЕ НАКОПЛЕН")
+                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                if let availableFrom = preview.availableFrom {
+                    Text("Кадры доступны с \(formatted(availableFrom))")
+                        .font(.system(size: 10, weight: .medium, design: .monospaced))
+                } else {
+                    Text("Кэш начнёт заполняться через несколько секунд")
+                        .font(.system(size: 10, weight: .medium, design: .monospaced))
+                }
+            }
+            .foregroundStyle(.white)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 9)
+            .background(.black.opacity(0.72), in: RoundedRectangle(cornerRadius: 8))
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+            .allowsHitTesting(false)
+        }
+    }
+
+    private func beginPreviewTransitionIfNeeded() {
+        transitionTimeoutTask?.cancel()
+        guard preview.isVisible else {
+            expectedTransitionID = nil
+            isWaitingForPlaybackStart = false
+            preview.cancelAndHide()
+            return
+        }
+
+        transitionBaselineID = playback.transitionID
+        expectedTransitionID = nil
+        isWaitingForPlaybackStart = true
+        transitionTimeoutTask = Task {
+            do {
+                try await Task.sleep(nanoseconds: 3_000_000_000)
+            } catch {
+                return
+            }
+            finishPreviewTransition()
+        }
+    }
+
+    private func finishPreviewTransition() {
+        transitionTimeoutTask?.cancel()
+        transitionTimeoutTask = nil
+        expectedTransitionID = nil
+        isWaitingForPlaybackStart = false
+        withAnimation(.easeOut(duration: 0.12)) {
+            preview.cancelAndHide()
+        }
     }
 
     private var timelineStart: Date {

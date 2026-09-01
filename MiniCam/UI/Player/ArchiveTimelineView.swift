@@ -7,6 +7,7 @@ struct ArchiveTimelineView: View {
     let isExpanded: Bool
     let range: ClosedRange<Date>
     let segments: [RecordingSegment]
+    let onPreview: (Date) -> Void
     let onCommit: (Date) -> Void
 
     @State private var dragAnchor: Date?
@@ -104,6 +105,7 @@ struct ArchiveTimelineView: View {
                             atOverviewPosition: position,
                             range: range
                         )
+                        onPreview(selectedDate)
                     }
                 ),
                 in: 0...1,
@@ -151,6 +153,7 @@ struct ArchiveTimelineView: View {
                 )
                 selectedDate = scale.snappedToLive(candidate, live: range.upperBound)
                 synchronizeOverview()
+                onPreview(selectedDate)
             }
             .onEnded { _ in
                 dragAnchor = nil

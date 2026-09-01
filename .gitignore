@@ -1,6 +1,7 @@
 .DS_Store
 .superpowers/
 build/
+build-release/
 DerivedData/
 Pods/
 *.xcuserstate

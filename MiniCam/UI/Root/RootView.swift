@@ -6,7 +6,10 @@ struct RootView: View {
     var body: some View {
         Group {
             if container.isReady {
-                CameraPlayerView(playback: container.playbackController)
+                CameraPlayerView(
+                    playback: container.playbackController,
+                    preview: container.archivePreviewController
+                )
             } else {
                 CameraSetupView(profile: container.profile)
             }

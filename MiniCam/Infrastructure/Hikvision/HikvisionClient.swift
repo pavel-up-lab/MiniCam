@@ -42,6 +42,14 @@ final class HikvisionClient: @unchecked Sendable {
         return allSegments
     }
 
+    func fetchCurrentSnapshot() async throws -> Data {
+        let channelID = Int(profile.channel) * 100 + StreamQuality.main.rawValue
+        return try await request(
+            path: "/ISAPI/Streaming/channels/\(channelID)/picture",
+            accept: "image/jpeg"
+        )
+    }
+
     private func searchPage(
         from start: Date,
         to end: Date,
@@ -80,7 +88,8 @@ final class HikvisionClient: @unchecked Sendable {
     private func request(
         path: String,
         method: String = "GET",
-        body: Data? = nil
+        body: Data? = nil,
+        accept: String = "application/xml"
     ) async throws -> Data {
         guard let baseURL = profile.httpBaseURL else {
             throw CameraError.invalidAddress
@@ -90,7 +99,7 @@ final class HikvisionClient: @unchecked Sendable {
         var request = URLRequest(url: baseURL.appendingPathComponent(relativePath))
         request.httpMethod = method
         request.httpBody = body
-        request.setValue("application/xml", forHTTPHeaderField: "Accept")
+        request.setValue(accept, forHTTPHeaderField: "Accept")
         if body != nil {
             request.setValue("application/xml; charset=UTF-8", forHTTPHeaderField: "Content-Type")
         }

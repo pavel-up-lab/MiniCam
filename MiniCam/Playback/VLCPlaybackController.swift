@@ -7,6 +7,9 @@ final class VLCPlaybackController: NSObject, ObservableObject {
     @Published private(set) var state: PlaybackState = .loading(nil)
     @Published private(set) var currentDate = Date()
     @Published private(set) var isPaused = false
+    @Published private(set) var frameRevision = 0
+    @Published private(set) var transitionID = 0
+    @Published private(set) var readyTransitionID = 0
 
     let videoView = VLCVideoView(frame: .zero)
     var archiveDidFinish: (() -> Void)?
@@ -16,6 +19,8 @@ final class VLCPlaybackController: NSObject, ObservableObject {
     private var credentials: CameraCredentials?
     private var activeSegment: RecordingSegment?
     private var activePlaybackStart: Date?
+    private var isAwaitingFirstFrame = false
+    private var hasActiveTransitionEnteredPlaying = false
 
     override init() {
         player = VLCMediaPlayer(options: [
@@ -36,10 +41,11 @@ final class VLCPlaybackController: NSObject, ObservableObject {
         self.credentials = credentials
     }
 
-    func playLive() {
+    @discardableResult
+    func playLive() -> Int? {
         guard let profile, let url = profile.liveStreamURL() else {
             state = .failed(.invalidAddress)
-            return
+            return nil
         }
 
         activeSegment = nil
@@ -47,16 +53,17 @@ final class VLCPlaybackController: NSObject, ObservableObject {
         isPaused = false
         currentDate = Date()
         state = .loading(nil)
-        play(url: url, lowLatency: true)
+        return play(url: url, lowLatency: true)
     }
 
-    func playArchive(segment: RecordingSegment, at date: Date) {
+    @discardableResult
+    func playArchive(segment: RecordingSegment, at date: Date) -> Int? {
         guard
             let sourceURL = URL(string: segment.playbackURI),
             let url = HikvisionPlaybackURL.starting(sourceURL, at: date)
         else {
             state = .failed(.incompatibleArchive)
-            return
+            return nil
         }
 
         activeSegment = segment
@@ -64,7 +71,7 @@ final class VLCPlaybackController: NSObject, ObservableObject {
         isPaused = false
         currentDate = date
         state = .loading(date)
-        play(url: url, lowLatency: false)
+        return play(url: url, lowLatency: false)
     }
 
     func stop() {
@@ -89,8 +96,12 @@ final class VLCPlaybackController: NSObject, ObservableObject {
         player.play()
     }
 
-    private func play(url: URL, lowLatency: Bool) {
+    private func play(url: URL, lowLatency: Bool) -> Int {
+        transitionID += 1
+        let startedTransitionID = transitionID
         player.stop()
+        isAwaitingFirstFrame = true
+        hasActiveTransitionEnteredPlaying = false
         let media = VLCMedia(url: url)
         media.addOption(lowLatency ? ":network-caching=500" : ":network-caching=750")
 
@@ -101,6 +112,7 @@ final class VLCPlaybackController: NSObject, ObservableObject {
 
         player.media = media
         player.play()
+        return startedTransitionID
     }
 }
 
@@ -111,6 +123,7 @@ extension VLCPlaybackController: VLCMediaPlayerDelegate {
 
             switch self.player.state {
             case .playing:
+                self.hasActiveTransitionEnteredPlaying = true
                 if let segment = self.activeSegment {
                     self.state = .archive(self.currentDate.clamped(to: segment.start...segment.end))
                 } else {
@@ -132,6 +145,18 @@ extension VLCPlaybackController: VLCMediaPlayerDelegate {
     nonisolated func mediaPlayerTimeChanged(_ notification: Notification) {
         Task { @MainActor [weak self] in
             guard let self else { return }
+            if
+                self.isAwaitingFirstFrame,
+                self.hasActiveTransitionEnteredPlaying,
+                self.player.state == .playing
+            {
+                self.isAwaitingFirstFrame = false
+                self.frameRevision += 1
+                self.readyTransitionID = self.transitionID
+#if DEBUG
+                print("[Playback] first frame revision=\(self.frameRevision)")
+#endif
+            }
             if
                 let segment = self.activeSegment,
                 let playbackStart = self.activePlaybackStart
