@@ -14,13 +14,15 @@ final class VLCPlaybackController: NSObject, ObservableObject {
     private var profile: CameraProfile?
     private var credentials: CameraCredentials?
     private var activeSegment: RecordingSegment?
+    private var activePlaybackStart: Date?
 
     override init() {
         player = VLCMediaPlayer(options: [
             "--no-video-title-show",
-            "--rtsp-tcp",
-            "--network-caching=150",
-            "--live-caching=150"
+            "--no-drop-late-frames",
+            "--no-skip-frames",
+            "--network-caching=500",
+            "--live-caching=500"
         ])
         super.init()
         videoView.fillScreen = true
@@ -40,28 +42,26 @@ final class VLCPlaybackController: NSObject, ObservableObject {
         }
 
         activeSegment = nil
+        activePlaybackStart = nil
         currentDate = Date()
         state = .loading(nil)
         play(url: url, lowLatency: true)
     }
 
     func playArchive(segment: RecordingSegment, at date: Date) {
-        guard let url = URL(string: segment.playbackURI) else {
+        guard
+            let sourceURL = URL(string: segment.playbackURI),
+            let url = HikvisionPlaybackURL.starting(sourceURL, at: date)
+        else {
             state = .failed(.incompatibleArchive)
             return
         }
 
         activeSegment = segment
+        activePlaybackStart = date
         currentDate = date
         state = .loading(date)
         play(url: url, lowLatency: false)
-
-        let offset = max(0, date.timeIntervalSince(segment.start))
-        Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 450_000_000)
-            guard let self, self.activeSegment?.id == segment.id else { return }
-            self.player.time = VLCTime(number: NSNumber(value: offset * 1_000))
-        }
     }
 
     func stop() {
@@ -71,8 +71,7 @@ final class VLCPlaybackController: NSObject, ObservableObject {
     private func play(url: URL, lowLatency: Bool) {
         player.stop()
         let media = VLCMedia(url: url)
-        media.addOption(":rtsp-tcp")
-        media.addOption(lowLatency ? ":network-caching=150" : ":network-caching=500")
+        media.addOption(lowLatency ? ":network-caching=500" : ":network-caching=750")
 
         if let credentials {
             media.addOption(":rtsp-user=\(credentials.username)")
@@ -111,9 +110,12 @@ extension VLCPlaybackController: VLCMediaPlayerDelegate {
     nonisolated func mediaPlayerTimeChanged(_ notification: Notification) {
         Task { @MainActor [weak self] in
             guard let self else { return }
-            if let segment = self.activeSegment {
+            if
+                let segment = self.activeSegment,
+                let playbackStart = self.activePlaybackStart
+            {
                 let elapsed = self.player.time.value?.doubleValue ?? 0
-                self.currentDate = segment.start.addingTimeInterval(elapsed / 1_000)
+                self.currentDate = playbackStart.addingTimeInterval(elapsed / 1_000)
                 self.state = .archive(self.currentDate.clamped(to: segment.start...segment.end))
             } else {
                 self.currentDate = Date()
