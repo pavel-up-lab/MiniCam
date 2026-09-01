@@ -4,6 +4,11 @@ use_frameworks!
 
 target 'MiniCam' do
   pod 'VLCKit', '3.7.2'
+
+  target 'MiniCamTests' do
+    inherit! :search_paths
+    pod 'VLCKit', '3.7.2'
+  end
 end
 
 post_install do |installer|
