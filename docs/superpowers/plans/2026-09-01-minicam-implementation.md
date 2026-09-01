@@ -108,7 +108,7 @@ lipo -archs build/Build/Products/Release/MiniCam.app/Contents/MacOS/MiniCam
 1. Выполнить Digest-аутентификацию через challenge URLSession.
 2. Проверить сведения об устройстве через ISAPI.
 3. Проверить состояние microSD.
-4. Отправить поиск записей за небольшой интервал через Content Management search.
+4. Отправить поиск записей за небольшой интервал через Content Management search на целевой камере `192.168.1.122`.
 5. Сохранить обезличенный пример XML-ответа как fixture.
 6. Из результата определить точный playback URI, который отдаёт эта прошивка.
 7. Проверить полученный источник непосредственно VLC/VLCKit.
