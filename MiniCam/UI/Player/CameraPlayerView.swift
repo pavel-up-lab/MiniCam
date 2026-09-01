@@ -8,6 +8,7 @@ struct CameraPlayerView: View {
     @State private var selectedDate = Date()
     @State private var isScrubbing = false
     @State private var isTimelineExpanded = true
+    @State private var isCalendarPresented = false
     @State private var transitionBaselineID = 0
     @State private var expectedTransitionID: Int?
     @State private var isWaitingForPlaybackStart = false
@@ -24,6 +25,14 @@ struct CameraPlayerView: View {
                 .ignoresSafeArea()
 
             previewOverlay
+
+            calendarButton
+                .frame(
+                    maxWidth: .infinity,
+                    maxHeight: .infinity,
+                    alignment: .topLeading
+                )
+                .padding(16)
 
             VStack(spacing: 12) {
                 statusRow
@@ -66,6 +75,37 @@ struct CameraPlayerView: View {
         .onDisappear {
             transitionTimeoutTask?.cancel()
             preview.cancelAndHide()
+        }
+    }
+
+    private var calendarButton: some View {
+        Button {
+            isCalendarPresented.toggle()
+        } label: {
+            Image(systemName: "calendar")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(Color(red: 0.73, green: 0.95, blue: 0.18))
+                .frame(width: 42, height: 42)
+                .background(
+                    Color.black.opacity(0.72),
+                    in: RoundedRectangle(cornerRadius: 9, style: .continuous)
+                )
+        }
+        .buttonStyle(.plain)
+        .disabled(container.recordingSegments.isEmpty)
+        .opacity(container.recordingSegments.isEmpty ? 0.42 : 1)
+        .help("Перейти к дате и времени")
+        .accessibilityLabel("Открыть календарь архива")
+        .popover(isPresented: $isCalendarPresented, arrowEdge: .top) {
+            ArchiveCalendarPopover(
+                segments: container.recordingSegments,
+                initialDate: selectedDate
+            ) { date in
+                isCalendarPresented = false
+                selectedDate = date
+                beginPreviewTransitionIfNeeded()
+                container.seek(to: date)
+            }
         }
     }
 
