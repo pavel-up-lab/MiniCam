@@ -6,6 +6,7 @@ import VLCKit
 final class VLCPlaybackController: NSObject, ObservableObject {
     @Published private(set) var state: PlaybackState = .loading(nil)
     @Published private(set) var currentDate = Date()
+    @Published private(set) var isPaused = false
 
     let videoView = VLCVideoView(frame: .zero)
     var archiveDidFinish: (() -> Void)?
@@ -43,6 +44,7 @@ final class VLCPlaybackController: NSObject, ObservableObject {
 
         activeSegment = nil
         activePlaybackStart = nil
+        isPaused = false
         currentDate = Date()
         state = .loading(nil)
         play(url: url, lowLatency: true)
@@ -59,13 +61,32 @@ final class VLCPlaybackController: NSObject, ObservableObject {
 
         activeSegment = segment
         activePlaybackStart = date
+        isPaused = false
         currentDate = date
         state = .loading(date)
         play(url: url, lowLatency: false)
     }
 
     func stop() {
+        isPaused = false
         player.stop()
+    }
+
+    func pause() {
+        guard !isPaused else { return }
+        switch state {
+        case .live, .archive:
+            player.pause()
+            isPaused = true
+        case .loading, .failed:
+            break
+        }
+    }
+
+    func resume() {
+        guard isPaused else { return }
+        isPaused = false
+        player.play()
     }
 
     private func play(url: URL, lowLatency: Bool) {
@@ -100,6 +121,7 @@ extension VLCPlaybackController: VLCMediaPlayerDelegate {
                     self.archiveDidFinish?()
                 }
             case .error:
+                self.isPaused = false
                 self.state = .failed(.cameraUnavailable)
             default:
                 break
