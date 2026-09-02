@@ -20,13 +20,13 @@ struct VLCPlaybackOptions {
         var options = [
             "--no-video-title-show",
             "--no-snapshot-preview",
+            "--no-drop-late-frames",
             "--network-caching=500",
             "--live-caching=500"
         ]
 
         if architecture == .appleSilicon {
             options += [
-                "--no-drop-late-frames",
                 "--no-skip-frames"
             ]
         }
