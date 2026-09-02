@@ -9,6 +9,7 @@ struct CameraPlayerView: View {
     @State private var isScrubbing = false
     @State private var isTimelineExpanded = true
     @State private var isCalendarPresented = false
+    @State private var isSettingsPresented = false
     @State private var isMotionPanelExpanded = false
     @State private var knownMotionEventIDs: Set<UUID> = []
     @State private var unreadMotionEventCount = 0
@@ -38,6 +39,14 @@ struct CameraPlayerView: View {
                     maxWidth: .infinity,
                     maxHeight: .infinity,
                     alignment: .topLeading
+                )
+                .padding(16)
+
+            settingsButton
+                .frame(
+                    maxWidth: .infinity,
+                    maxHeight: .infinity,
+                    alignment: .topTrailing
                 )
                 .padding(16)
 
@@ -124,6 +133,38 @@ struct CameraPlayerView: View {
         .onDisappear {
             transitionTimeoutTask?.cancel()
             preview.cancelAndHide()
+        }
+    }
+
+    private var settingsButton: some View {
+        Button {
+            isSettingsPresented.toggle()
+        } label: {
+            ZStack(alignment: .topTrailing) {
+                Image(systemName: "gearshape.fill")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(Color(red: 0.73, green: 0.95, blue: 0.18))
+                    .frame(width: 42, height: 42)
+                    .background(
+                        Color.black.opacity(0.72),
+                        in: RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    )
+
+                if container.storageStatus.requiresAttention {
+                    Circle()
+                        .fill(Color.orange)
+                        .frame(width: 10, height: 10)
+                        .overlay(Circle().stroke(Color.black, lineWidth: 2))
+                        .offset(x: 2, y: -2)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .help("Настройки")
+        .accessibilityLabel("Открыть настройки")
+        .popover(isPresented: $isSettingsPresented, arrowEdge: .top) {
+            SettingsPanel(isPresented: $isSettingsPresented)
+                .environmentObject(container)
         }
     }
 

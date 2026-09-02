@@ -5,6 +5,7 @@ final class ArchiveMotionAnalyzer: ObservableObject {
     @Published private(set) var events: [MotionEvent] = []
     @Published private(set) var isAnalyzing = false
     @Published private(set) var hasLoadedStoredEvents = false
+    @Published private(set) var isMotionTrackingEnabled = true
 
     let sampler = ArchiveFrameSampler()
 
@@ -17,6 +18,7 @@ final class ArchiveMotionAnalyzer: ObservableObject {
     private var analysisTask: Task<Void, Never>?
     private var credentials: CameraCredentials?
     private var generation = UUID()
+    private var trackingEnabledAt = Date.distantPast
 
     init(
         frameCacheStore: FrameCacheStore,
@@ -48,7 +50,7 @@ final class ArchiveMotionAnalyzer: ObservableObject {
     }
 
     func enqueueNewArchive(from segments: [RecordingSegment]) {
-        guard detector != nil, credentials != nil else { return }
+        guard credentials != nil else { return }
         let slices = cursor.takeNewSlices(from: segments)
         guard !slices.isEmpty else { return }
 
@@ -78,6 +80,15 @@ final class ArchiveMotionAnalyzer: ObservableObject {
 
     func imageURL(for event: MotionEvent) -> URL {
         store.imageURL(for: event)
+    }
+
+    func setMotionTrackingEnabled(_ enabled: Bool, at date: Date = Date()) {
+        guard isMotionTrackingEnabled != enabled else { return }
+        isMotionTrackingEnabled = enabled
+        tracker = MotionEventTracker()
+        if enabled {
+            trackingEnabledAt = date
+        }
     }
 
     private func beginProcessingIfNeeded() {
@@ -127,7 +138,6 @@ final class ArchiveMotionAnalyzer: ObservableObject {
     }
 
     private func analyze(_ samples: [ArchiveFrameSample]) async throws {
-        guard let detector else { return }
         var previousSample: ArchiveFrameSample?
 
         for sample in samples {
@@ -136,6 +146,14 @@ final class ArchiveMotionAnalyzer: ObservableObject {
                 sample.thumbnailJPEG,
                 capturedAt: sample.capturedAt
             )
+            guard
+                isMotionTrackingEnabled,
+                sample.capturedAt >= trackingEnabledAt,
+                let detector
+            else {
+                previousSample = nil
+                continue
+            }
             let detections = try await detector.detect(in: sample.image)
             if
                 let candidate = tracker.process(detections, at: sample.capturedAt),

@@ -15,6 +15,10 @@ final class AppContainer: ObservableObject {
     @Published private(set) var recordingSegments: [RecordingSegment] = []
     @Published private(set) var isReady = false
     @Published private(set) var isTransportBusy = false
+    @Published private(set) var appSettings: AppSettings
+    @Published private(set) var storageStatus: StorageStatus = .internalStorage
+    @Published private(set) var isApplyingSettings = false
+    @Published private(set) var currentExternalFolderURL: URL?
 
     let playbackController = VLCPlaybackController()
     let archivePreviewController: ArchivePreviewController
@@ -27,6 +31,9 @@ final class AppContainer: ObservableObject {
         resumeOffset: 0.001
     )
     private let frameCacheStore: FrameCacheStore
+    private let storageCoordinator: StorageCoordinator
+    private let settingsStore: AppSettingsStore
+    private let externalFolderAccess = SecurityScopedFolderAccess()
 
     private let profileStore: ProfileStore
     private let credentialStore: CredentialStore
@@ -37,23 +44,107 @@ final class AppContainer: ObservableObject {
 
     init(
         profileStore: ProfileStore = ProfileStore(),
-        credentialStore: CredentialStore = KeychainCredentialStore()
+        credentialStore: CredentialStore = KeychainCredentialStore(),
+        settingsStore: AppSettingsStore = AppSettingsStore()
     ) {
-        let frameCacheStore = FrameCacheStore()
+        let settings = settingsStore.load()
+        let internalRoot = StorageCoordinator.defaultInternalRoot
+        let roots = StorageRootProvider(initialRoot: internalRoot)
+        let storageCoordinator = StorageCoordinator(
+            internalRoot: internalRoot,
+            roots: roots
+        )
+        let frameCacheStore = FrameCacheStore(rootProvider: roots)
+        let motionEventStore = MotionEventStore(rootProvider: roots)
         self.frameCacheStore = frameCacheStore
+        self.storageCoordinator = storageCoordinator
+        self.settingsStore = settingsStore
+        appSettings = settings
         archivePreviewController = ArchivePreviewController(store: frameCacheStore)
         frameCacheRecorder = FrameCacheRecorder(store: frameCacheStore)
-        motionAnalyzer = ArchiveMotionAnalyzer(frameCacheStore: frameCacheStore)
+        motionAnalyzer = ArchiveMotionAnalyzer(
+            frameCacheStore: frameCacheStore,
+            store: motionEventStore
+        )
         self.profileStore = profileStore
         self.credentialStore = credentialStore
         profile = profileStore.load()
+        motionAnalyzer.setMotionTrackingEnabled(settings.isMotionTrackingEnabled)
 
-        if let credentials = try? credentialStore.load(), !credentials.isEmpty {
-            let savedProfile = profile
-            Task { [weak self] in
-                await self?.connect(profile: savedProfile, credentials: credentials)
+        var folderToRestore: URL?
+        if let bookmark = settings.externalStorageBookmark {
+            let resolvedURL = try? ExternalFolderBookmark.resolve(bookmark)
+            currentExternalFolderURL = resolvedURL
+                ?? settings.externalStorageDisplayPath.map { URL(fileURLWithPath: $0) }
+            folderToRestore = currentExternalFolderURL
+            externalFolderAccess.replace(with: resolvedURL)
+        }
+
+        let savedCredentials = try? credentialStore.load()
+        let savedProfile = profile
+        Task { [weak self] in
+            guard let self else { return }
+            if let folderToRestore {
+                self.storageStatus = await self.storageCoordinator
+                    .configureExternalFolder(folderToRestore)
+            }
+            if let savedCredentials, !savedCredentials.isEmpty {
+                await self.connect(profile: savedProfile, credentials: savedCredentials)
             }
         }
+    }
+
+    func applySettings(
+        motionTrackingEnabled: Bool,
+        externalFolderURL: URL?
+    ) async throws {
+        isApplyingSettings = true
+        defer { isApplyingSettings = false }
+
+        let previousExternalFolderURL = currentExternalFolderURL
+        let newSettings: AppSettings
+        if let externalFolderURL {
+            let bookmark = try ExternalFolderBookmark.make(for: externalFolderURL)
+            externalFolderAccess.replace(with: externalFolderURL)
+            let status = await storageCoordinator.configureExternalFolder(externalFolderURL)
+            guard case .externalStorage = status else {
+                externalFolderAccess.replace(with: previousExternalFolderURL)
+                storageStatus = await restoreStorageSelection(previousExternalFolderURL)
+                throw SettingsApplyError.externalFolderUnavailable
+            }
+            storageStatus = status
+            currentExternalFolderURL = externalFolderURL
+            newSettings = AppSettings(
+                isMotionTrackingEnabled: motionTrackingEnabled,
+                externalStorageBookmark: bookmark,
+                externalStorageDisplayPath: externalFolderURL.path
+            )
+        } else {
+            let status = await storageCoordinator.configureInternalStorage()
+            guard case .internalStorage = status else {
+                storageStatus = await restoreStorageSelection(previousExternalFolderURL)
+                throw SettingsApplyError.storageMigrationFailed
+            }
+            storageStatus = status
+            currentExternalFolderURL = nil
+            externalFolderAccess.replace(with: nil)
+            newSettings = AppSettings(
+                isMotionTrackingEnabled: motionTrackingEnabled,
+                externalStorageBookmark: nil,
+                externalStorageDisplayPath: nil
+            )
+        }
+
+        try settingsStore.save(newSettings)
+        appSettings = newSettings
+        motionAnalyzer.setMotionTrackingEnabled(motionTrackingEnabled)
+    }
+
+    private func restoreStorageSelection(_ externalFolderURL: URL?) async -> StorageStatus {
+        if let externalFolderURL {
+            return await storageCoordinator.configureExternalFolder(externalFolderURL)
+        }
+        return await storageCoordinator.configureInternalStorage()
     }
 
     func connect(profile: CameraProfile, credentials: CameraCredentials) async {
@@ -271,8 +362,14 @@ final class AppContainer: ObservableObject {
                 _ = await self.refreshRecentRecordings(
                     from: Date().addingTimeInterval(-120)
                 )
+                await self.refreshStorageAvailability()
             }
         }
+    }
+
+    private func refreshStorageAvailability() async {
+        guard appSettings.externalStorageBookmark != nil else { return }
+        storageStatus = await storageCoordinator.refreshExternalFolder()
     }
 
     private func stopArchiveRefresh() {
@@ -326,5 +423,19 @@ final class AppContainer: ObservableObject {
         archiveContinuationTask?.cancel()
         archiveContinuationTask = nil
         isTransportBusy = false
+    }
+}
+
+enum SettingsApplyError: LocalizedError {
+    case externalFolderUnavailable
+    case storageMigrationFailed
+
+    var errorDescription: String? {
+        switch self {
+        case .externalFolderUnavailable:
+            return "Не удалось записать данные в выбранную папку. Настройки не сохранены."
+        case .storageMigrationFailed:
+            return "Не удалось безопасно перенести все данные. Настройки не изменены."
+        }
     }
 }

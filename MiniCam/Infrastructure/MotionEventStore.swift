@@ -1,18 +1,21 @@
 import Foundation
 
 actor MotionEventStore {
-    private let directory: URL
+    private let explicitDirectory: URL?
+    private let rootProvider: StorageRootProvider?
     private let retentionDuration: TimeInterval
     private let fileManager: FileManager
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
 
     init(
-        directory: URL = MotionEventStore.defaultDirectory,
+        directory: URL? = nil,
+        rootProvider: StorageRootProvider? = nil,
         retentionDuration: TimeInterval = 3 * 86_400,
         fileManager: FileManager = .default
     ) {
-        self.directory = directory
+        explicitDirectory = directory
+        self.rootProvider = rootProvider
         self.retentionDuration = retentionDuration
         self.fileManager = fileManager
         encoder = JSONEncoder()
@@ -37,12 +40,12 @@ actor MotionEventStore {
     }
 
     nonisolated func imageURL(for event: MotionEvent) -> URL {
-        directory.appendingPathComponent(event.imageFileName)
+        activeDirectory.appendingPathComponent(event.imageFileName)
     }
 
     private func createDirectoryIfNeeded() throws {
         try fileManager.createDirectory(
-            at: directory,
+            at: activeDirectory,
             withIntermediateDirectories: true
         )
     }
@@ -85,14 +88,14 @@ actor MotionEventStore {
 
     private func contents() throws -> [URL] {
         try fileManager.contentsOfDirectory(
-            at: directory,
+            at: activeDirectory,
             includingPropertiesForKeys: nil,
             options: [.skipsHiddenFiles]
         )
     }
 
     private func metadataURL(for id: UUID) -> URL {
-        directory.appendingPathComponent("\(id.uuidString).json")
+        activeDirectory.appendingPathComponent("\(id.uuidString).json")
     }
 
     private static var defaultDirectory: URL {
@@ -103,5 +106,14 @@ actor MotionEventStore {
         return applicationSupport
             .appendingPathComponent("MiniCam", isDirectory: true)
             .appendingPathComponent("MotionEvents", isDirectory: true)
+    }
+
+    nonisolated private var activeDirectory: URL {
+        if let explicitDirectory { return explicitDirectory }
+        if let rootProvider {
+            return rootProvider.activeRoot()
+                .appendingPathComponent("MotionEvents", isDirectory: true)
+        }
+        return Self.defaultDirectory
     }
 }

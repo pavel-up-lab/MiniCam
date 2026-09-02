@@ -2,20 +2,24 @@ import Foundation
 
 actor FrameCacheStore {
     private let fileManager: FileManager
-    private let directoryURL: URL
+    private let explicitDirectoryURL: URL?
+    private let rootProvider: StorageRootProvider?
     private let retentionDuration: TimeInterval
 
     private var index = FrameCacheIndex()
     private var isPrepared = false
+    private var preparedDirectoryURL: URL?
 
     init(
         directoryURL: URL? = nil,
+        rootProvider: StorageRootProvider? = nil,
         retentionDuration: TimeInterval = FrameCacheRetention.duration,
         fileManager: FileManager = .default
     ) {
         self.fileManager = fileManager
         self.retentionDuration = retentionDuration
-        self.directoryURL = directoryURL ?? Self.defaultDirectory(fileManager: fileManager)
+        explicitDirectoryURL = directoryURL
+        self.rootProvider = rootProvider
     }
 
     func storeJPEG(_ data: Data, capturedAt date: Date) throws {
@@ -49,6 +53,12 @@ actor FrameCacheStore {
     }
 
     private func prepareIfNeeded() {
+        let directoryURL = activeDirectoryURL
+        if preparedDirectoryURL != directoryURL {
+            index = FrameCacheIndex()
+            isPrepared = false
+            preparedDirectoryURL = directoryURL
+        }
         guard !isPrepared else { return }
 
         do {
@@ -81,7 +91,7 @@ actor FrameCacheStore {
 
     private func frameURL(for date: Date) -> URL {
         let milliseconds = Int64((date.timeIntervalSince1970 * 1_000).rounded())
-        return directoryURL.appendingPathComponent("\(milliseconds).jpg")
+        return activeDirectoryURL.appendingPathComponent("\(milliseconds).jpg")
     }
 
     private func pruneExpired(referenceDate: Date) {
@@ -104,5 +114,15 @@ actor FrameCacheStore {
             .appendingPathComponent("MiniCam", isDirectory: true)
             .appendingPathComponent("FrameCache", isDirectory: true)
             .appendingPathComponent("v2-720p", isDirectory: true)
+    }
+
+    private var activeDirectoryURL: URL {
+        if let explicitDirectoryURL { return explicitDirectoryURL }
+        if let rootProvider {
+            return rootProvider.activeRoot()
+                .appendingPathComponent("FrameCache", isDirectory: true)
+                .appendingPathComponent("v2-720p", isDirectory: true)
+        }
+        return Self.defaultDirectory(fileManager: fileManager)
     }
 }
