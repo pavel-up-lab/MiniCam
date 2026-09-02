@@ -3,7 +3,6 @@ import Foundation
 actor MotionEventStore {
     private let explicitDirectory: URL?
     private let rootProvider: StorageRootProvider?
-    private let retentionDuration: TimeInterval
     private let fileManager: FileManager
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
@@ -11,12 +10,10 @@ actor MotionEventStore {
     init(
         directory: URL? = nil,
         rootProvider: StorageRootProvider? = nil,
-        retentionDuration: TimeInterval = 3 * 86_400,
         fileManager: FileManager = .default
     ) {
         explicitDirectory = directory
         self.rootProvider = rootProvider
-        self.retentionDuration = retentionDuration
         self.fileManager = fileManager
         encoder = JSONEncoder()
         decoder = JSONDecoder()
@@ -24,18 +21,45 @@ actor MotionEventStore {
 
     func save(
         _ event: MotionEvent,
-        jpegData: Data,
-        referenceDate: Date = Date()
+        jpegData: Data
     ) throws {
         try createDirectoryIfNeeded()
         try jpegData.write(to: imageURL(for: event), options: .atomic)
         try encoder.encode(event).write(to: metadataURL(for: event.id), options: .atomic)
-        try prune(referenceDate: referenceDate)
     }
 
-    func load(referenceDate: Date = Date()) throws -> [MotionEvent] {
+    func load() throws -> [MotionEvent] {
         try createDirectoryIfNeeded()
-        try prune(referenceDate: referenceDate)
+        return try storedEvents().sorted { $0.startedAt > $1.startedAt }
+    }
+
+    func prune(olderThan cutoff: Date) throws -> [MotionEvent] {
+        try createDirectoryIfNeeded()
+        let events = try storedEvents()
+
+        for event in events where event.startedAt < cutoff {
+            try removeIfPresent(metadataURL(for: event.id))
+            try removeIfPresent(imageURL(for: event))
+        }
+
+        let retainedEvents = try storedEvents()
+        let retainedImageNames = Set(retainedEvents.map(\.imageFileName))
+        for fileURL in try contents() where fileURL.pathExtension.lowercased() == "jpg" {
+            if !retainedImageNames.contains(fileURL.lastPathComponent) {
+                try removeIfPresent(fileURL)
+            }
+        }
+        return retainedEvents.sorted { $0.startedAt > $1.startedAt }
+    }
+
+    func clear() throws -> [MotionEvent] {
+        try createDirectoryIfNeeded()
+        for fileURL in try contents() {
+            let fileExtension = fileURL.pathExtension.lowercased()
+            if fileExtension == "json" || fileExtension == "jpg" {
+                try removeIfPresent(fileURL)
+            }
+        }
         return try storedEvents().sorted { $0.startedAt > $1.startedAt }
     }
 
@@ -50,25 +74,9 @@ actor MotionEventStore {
         )
     }
 
-    private func prune(referenceDate: Date) throws {
-        let cutoff = referenceDate.addingTimeInterval(-retentionDuration)
-        let events = try storedEvents()
-        let retainedImageNames = Set(
-            events.lazy
-                .filter { $0.startedAt >= cutoff }
-                .map(\.imageFileName)
-        )
-
-        for event in events where event.startedAt < cutoff {
-            try? fileManager.removeItem(at: metadataURL(for: event.id))
-            try? fileManager.removeItem(at: imageURL(for: event))
-        }
-
-        for fileURL in try contents() where fileURL.pathExtension.lowercased() == "jpg" {
-            if !retainedImageNames.contains(fileURL.lastPathComponent) {
-                try? fileManager.removeItem(at: fileURL)
-            }
-        }
+    private func removeIfPresent(_ url: URL) throws {
+        guard fileManager.fileExists(atPath: url.path) else { return }
+        try fileManager.removeItem(at: url)
     }
 
     private func storedEvents() throws -> [MotionEvent] {

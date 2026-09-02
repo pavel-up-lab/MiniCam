@@ -25,6 +25,7 @@ final class AppContainer: ObservableObject {
     @Published private(set) var isScreenshotFolderFallback = false
     @Published private(set) var isExportingVideo = false
     @Published private(set) var videoExportProgress = 0.0
+    @Published private(set) var isClearingMotionEvents = false
 
     let playbackController = VLCPlaybackController()
     let archivePreviewController: ArchivePreviewController
@@ -49,8 +50,10 @@ final class AppContainer: ObservableObject {
     private var pausedLiveDate: Date?
     private var archiveRefreshTask: Task<Void, Never>?
     private var archiveContinuationTask: Task<Void, Never>?
+    private var motionEventCleanupTask: Task<Void, Never>?
     private var activeVideoExporter: VideoClipExporter?
     private var applicationTerminationObserver: NSObjectProtocol?
+    private var isMaintainingMotionEvents = false
 
     init(
         profileStore: ProfileStore = ProfileStore(),
@@ -85,6 +88,7 @@ final class AppContainer: ObservableObject {
         self.credentialStore = credentialStore
         profile = profileStore.load()
         motionAnalyzer.setMotionTrackingEnabled(settings.isMotionTrackingEnabled)
+        motionAnalyzer.setMotionEventRecordingMode(settings.motionEventRecordingMode)
         playbackController.playbackWillTransition = { [weak self] in
             self?.motionAnalyzer.suspendSampling()
         }
@@ -124,6 +128,7 @@ final class AppContainer: ObservableObject {
             queue: .main
         ) { [weak self] _ in
             self?.activeVideoExporter?.cancel()
+            self?.motionEventCleanupTask?.cancel()
         }
 
         let savedCredentials = try? credentialStore.load()
@@ -134,6 +139,7 @@ final class AppContainer: ObservableObject {
                 self.storageStatus = await self.storageCoordinator
                     .configureExternalFolder(folderToRestore)
             }
+            self.startMotionEventCleanupSchedule()
             if let savedCredentials, !savedCredentials.isEmpty {
                 await self.connect(profile: savedProfile, credentials: savedCredentials)
             }
@@ -142,6 +148,8 @@ final class AppContainer: ObservableObject {
 
     func applySettings(
         motionTrackingEnabled: Bool,
+        motionEventRecordingMode: MotionEventRecordingMode,
+        motionEventRetention: MotionEventRetention,
         externalFolderURL: URL?,
         screenshotFolderURL: URL?
     ) async throws {
@@ -181,6 +189,9 @@ final class AppContainer: ObservableObject {
         applyScreenshotFolder(screenshotFolderURL)
         let newSettings = AppSettings(
             isMotionTrackingEnabled: motionTrackingEnabled,
+            motionEventRecordingMode: motionEventRecordingMode,
+            motionEventRetention: motionEventRetention,
+            lastMotionEventCleanupAt: appSettings.lastMotionEventCleanupAt,
             externalStorageBookmark: storageSettings.bookmark,
             externalStorageDisplayPath: storageSettings.displayPath,
             screenshotFolderBookmark: screenshotSettings.bookmark,
@@ -190,6 +201,22 @@ final class AppContainer: ObservableObject {
         try settingsStore.save(newSettings)
         appSettings = newSettings
         motionAnalyzer.setMotionTrackingEnabled(motionTrackingEnabled)
+        motionAnalyzer.setMotionEventRecordingMode(motionEventRecordingMode)
+    }
+
+    func clearMotionEventHistory() async throws {
+        guard !isMaintainingMotionEvents else { return }
+        isMaintainingMotionEvents = true
+        isClearingMotionEvents = true
+        defer {
+            isClearingMotionEvents = false
+            isMaintainingMotionEvents = false
+        }
+        do {
+            try await motionAnalyzer.clearEventHistory()
+        } catch {
+            throw SettingsApplyError.motionEventCleanupFailed
+        }
     }
 
     func takeScreenshot() async throws -> URL {
@@ -621,6 +648,50 @@ final class AppContainer: ObservableObject {
         storageStatus = await storageCoordinator.refreshExternalFolder()
     }
 
+    private func startMotionEventCleanupSchedule() {
+        motionEventCleanupTask?.cancel()
+        motionEventCleanupTask = Task { [weak self] in
+            while !Task.isCancelled {
+                guard let self else { return }
+                await self.performScheduledMotionEventCleanupIfDue()
+                do {
+                    try await Task.sleep(nanoseconds: 3_600_000_000_000)
+                } catch {
+                    return
+                }
+            }
+        }
+    }
+
+    private func performScheduledMotionEventCleanupIfDue(
+        at referenceDate: Date = Date()
+    ) async {
+        guard !isApplyingSettings, !isMaintainingMotionEvents else { return }
+        guard let lastCleanupAt = appSettings.lastMotionEventCleanupAt else {
+            var initializedSettings = appSettings
+            initializedSettings.lastMotionEventCleanupAt = referenceDate
+            guard (try? settingsStore.save(initializedSettings)) != nil else { return }
+            appSettings = initializedSettings
+            return
+        }
+        guard referenceDate.timeIntervalSince(lastCleanupAt) >= 86_400 else { return }
+
+        isMaintainingMotionEvents = true
+        defer { isMaintainingMotionEvents = false }
+        let cutoff = referenceDate.addingTimeInterval(-appSettings.motionEventRetention.duration)
+        do {
+            try await motionAnalyzer.pruneEventHistory(olderThan: cutoff)
+            var updatedSettings = appSettings
+            updatedSettings.lastMotionEventCleanupAt = referenceDate
+            try settingsStore.save(updatedSettings)
+            appSettings = updatedSettings
+        } catch {
+#if DEBUG
+            print("[MotionEvents] scheduled cleanup failed: \(error)")
+#endif
+        }
+    }
+
     private func stopArchiveRefresh() {
         archiveRefreshTask?.cancel()
         archiveRefreshTask = nil
@@ -690,6 +761,7 @@ enum SettingsApplyError: LocalizedError {
     case externalFolderUnavailable
     case storageMigrationFailed
     case screenshotFolderUnavailable
+    case motionEventCleanupFailed
 
     var errorDescription: String? {
         switch self {
@@ -699,6 +771,8 @@ enum SettingsApplyError: LocalizedError {
             return "Не удалось безопасно перенести все данные. Настройки не изменены."
         case .screenshotFolderUnavailable:
             return "Не удалось записать скриншот в выбранную папку."
+        case .motionEventCleanupFailed:
+            return "Не удалось полностью очистить историю событий. Попробуйте ещё раз."
         }
     }
 }

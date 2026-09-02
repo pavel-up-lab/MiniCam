@@ -8,9 +8,13 @@ struct SettingsPanel: View {
     let onSaved: () -> Void
 
     @State private var isMotionTrackingEnabled = true
+    @State private var motionEventRecordingMode: MotionEventRecordingMode = .peopleAndVehicles
+    @State private var motionEventRetention: MotionEventRetention = .threeDays
     @State private var externalFolderURL: URL?
     @State private var screenshotFolderURL: URL?
     @State private var errorMessage: String?
+    @State private var successMessage: String?
+    @State private var isClearConfirmationPresented = false
 
     private let accent = Color(red: 0.73, green: 0.95, blue: 0.18)
     private let panelBackground = Color(red: 0.055, green: 0.065, blue: 0.071)
@@ -18,7 +22,7 @@ struct SettingsPanel: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             header
-            trackingRow
+            eventSettingsSection
             storageSection
             screenshotSection
 
@@ -27,6 +31,12 @@ struct SettingsPanel: View {
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(Color(red: 1.0, green: 0.47, blue: 0.39))
                     .fixedSize(horizontal: false, vertical: true)
+            }
+
+            if let successMessage {
+                Label(successMessage, systemImage: "checkmark.circle.fill")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(accent)
             }
 
             actionRow
@@ -40,10 +50,15 @@ struct SettingsPanel: View {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .stroke(accent.opacity(0.34), lineWidth: 1)
         }
+        .overlay {
+            if isClearConfirmationPresented {
+                clearConfirmation
+            }
+        }
         .shadow(color: .black.opacity(0.62), radius: 30, y: 16)
         .onAppear(perform: loadDraft)
         .onExitCommand {
-            guard !container.isApplyingSettings else { return }
+            guard !isSettingsBusy else { return }
             onCancel()
         }
     }
@@ -65,33 +80,131 @@ struct SettingsPanel: View {
                     .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
             }
             .buttonStyle(.plain)
-            .disabled(container.isApplyingSettings)
+            .disabled(isSettingsBusy)
             .help("Закрыть без сохранения")
             .accessibilityLabel("Закрыть настройки без сохранения")
         }
     }
 
-    private var trackingRow: some View {
-        HStack(spacing: 14) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text("Распознавать движение")
-                    .font(.system(size: 13, weight: .semibold))
-                Text("Люди и транспорт в новых данных архива")
-                    .font(.system(size: 10))
-                    .foregroundStyle(.white.opacity(0.5))
+    private var eventSettingsSection: some View {
+        VStack(alignment: .leading, spacing: 11) {
+            Text("СОБЫТИЯ ДВИЖЕНИЯ")
+                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                .foregroundStyle(.white.opacity(0.54))
+
+            HStack(spacing: 14) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Распознавать движение")
+                        .font(.system(size: 13, weight: .semibold))
+                    Text("Только в новых данных архива")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.white.opacity(0.5))
+                }
+
+                Spacer()
+
+                Toggle("", isOn: $isMotionTrackingEnabled)
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+                    .tint(accent)
+                    .disabled(isSettingsBusy)
             }
 
-            Spacer()
+            Divider()
+                .overlay(Color.white.opacity(0.09))
 
-            Toggle("", isOn: $isMotionTrackingEnabled)
+            settingsPickerRow(title: "Тип событий") {
+                Picker("Тип событий", selection: $motionEventRecordingMode) {
+                    ForEach(MotionEventRecordingMode.allCases, id: \.self) { mode in
+                        Text(mode.title).tag(mode)
+                    }
+                }
                 .labelsHidden()
-                .toggleStyle(.switch)
-                .tint(accent)
-                .disabled(container.isApplyingSettings)
+                .pickerStyle(.menu)
+                .frame(width: 164)
+                .disabled(!isMotionTrackingEnabled || isSettingsBusy)
+            }
+
+            settingsPickerRow(title: "Хранить историю") {
+                Picker("Срок хранения", selection: $motionEventRetention) {
+                    ForEach(MotionEventRetention.allCases, id: \.self) { retention in
+                        Text(retention.title).tag(retention)
+                    }
+                }
+                .labelsHidden()
+                .pickerStyle(.menu)
+                .frame(width: 164)
+                .disabled(isSettingsBusy)
+            }
+
+            Divider()
+                .overlay(Color.white.opacity(0.09))
+
+            Button("Очистить всю историю…") {
+                errorMessage = nil
+                successMessage = nil
+                isClearConfirmationPresented = true
+            }
+            .buttonStyle(SettingsDestructiveButtonStyle())
+            .disabled(isSettingsBusy)
         }
         .padding(13)
         .background(Color.white.opacity(0.055))
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+
+    private func settingsPickerRow<Content: View>(
+        title: String,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        HStack(spacing: 12) {
+            Text(title)
+                .font(.system(size: 12, weight: .semibold))
+            Spacer(minLength: 8)
+            content()
+        }
+    }
+
+    private var clearConfirmation: some View {
+        ZStack {
+            panelBackground.opacity(0.94)
+
+            VStack(alignment: .leading, spacing: 14) {
+                Label("Очистить историю?", systemImage: "trash.fill")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(Color(red: 1.0, green: 0.47, blue: 0.39))
+
+                Text("Удалить все события движения и их кадры? Архив камеры, кадры перемотки и скриншоты останутся без изменений.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.white.opacity(0.72))
+                    .fixedSize(horizontal: false, vertical: true)
+
+                HStack(spacing: 9) {
+                    Spacer()
+                    Button("Отмена") {
+                        isClearConfirmationPresented = false
+                    }
+                    .buttonStyle(SettingsSecondaryButtonStyle())
+                    .disabled(isSettingsBusy)
+
+                    Button(container.isClearingMotionEvents ? "Удаляем…" : "Удалить") {
+                        clearHistory()
+                    }
+                    .buttonStyle(SettingsDestructiveButtonStyle())
+                    .disabled(isSettingsBusy)
+                }
+            }
+            .padding(18)
+            .frame(width: 340)
+            .background(Color(red: 0.085, green: 0.095, blue: 0.102))
+            .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 13, style: .continuous)
+                    .stroke(Color.white.opacity(0.12), lineWidth: 1)
+            }
+            .shadow(color: .black.opacity(0.72), radius: 24, y: 12)
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
     private var storageSection: some View {
@@ -118,7 +231,7 @@ struct SettingsPanel: View {
 
                 Button("Выбрать…", action: chooseFolder)
                     .buttonStyle(SettingsSecondaryButtonStyle())
-                    .disabled(container.isApplyingSettings)
+                    .disabled(isSettingsBusy)
             }
 
             Label(storageDescription, systemImage: storageSymbol)
@@ -133,7 +246,7 @@ struct SettingsPanel: View {
                 .buttonStyle(.plain)
                 .font(.system(size: 10, weight: .semibold))
                 .foregroundStyle(.white.opacity(0.62))
-                .disabled(container.isApplyingSettings)
+                .disabled(isSettingsBusy)
             }
         }
         .padding(13)
@@ -147,7 +260,7 @@ struct SettingsPanel: View {
 
             Button("Отмена", action: onCancel)
                 .buttonStyle(SettingsSecondaryButtonStyle())
-                .disabled(container.isApplyingSettings)
+                .disabled(isSettingsBusy)
 
             Button {
                 save()
@@ -163,7 +276,7 @@ struct SettingsPanel: View {
             }
             .buttonStyle(SettingsPrimaryButtonStyle(accent: accent))
             .keyboardShortcut(.defaultAction)
-            .disabled(container.isApplyingSettings)
+            .disabled(isSettingsBusy)
         }
     }
 
@@ -191,7 +304,7 @@ struct SettingsPanel: View {
 
                 Button("Выбрать…", action: chooseScreenshotFolder)
                     .buttonStyle(SettingsSecondaryButtonStyle())
-                    .disabled(container.isApplyingSettings)
+                    .disabled(isSettingsBusy)
             }
 
             Label(screenshotFolderDescription, systemImage: screenshotFolderSymbol)
@@ -206,7 +319,7 @@ struct SettingsPanel: View {
                 .buttonStyle(.plain)
                 .font(.system(size: 10, weight: .semibold))
                 .foregroundStyle(.white.opacity(0.62))
-                .disabled(container.isApplyingSettings)
+                .disabled(isSettingsBusy)
             }
         }
         .padding(13)
@@ -259,11 +372,19 @@ struct SettingsPanel: View {
             : accent
     }
 
+    private var isSettingsBusy: Bool {
+        container.isApplyingSettings || container.isClearingMotionEvents
+    }
+
     private func loadDraft() {
         isMotionTrackingEnabled = container.appSettings.isMotionTrackingEnabled
+        motionEventRecordingMode = container.appSettings.motionEventRecordingMode
+        motionEventRetention = container.appSettings.motionEventRetention
         externalFolderURL = container.currentExternalFolderURL
         screenshotFolderURL = container.currentCustomScreenshotFolderURL
         errorMessage = nil
+        successMessage = nil
+        isClearConfirmationPresented = false
     }
 
     private func chooseFolder() {
@@ -277,6 +398,7 @@ struct SettingsPanel: View {
         if panel.runModal() == .OK {
             externalFolderURL = panel.url
             errorMessage = nil
+            successMessage = nil
         }
     }
 
@@ -291,15 +413,35 @@ struct SettingsPanel: View {
         if panel.runModal() == .OK {
             screenshotFolderURL = panel.url
             errorMessage = nil
+            successMessage = nil
+        }
+    }
+
+    private func clearHistory() {
+        errorMessage = nil
+        successMessage = nil
+        Task {
+            do {
+                try await container.clearMotionEventHistory()
+                isClearConfirmationPresented = false
+                successMessage = "История очищена"
+            } catch {
+                isClearConfirmationPresented = false
+                errorMessage = (error as? LocalizedError)?.errorDescription
+                    ?? "Не удалось полностью очистить историю событий."
+            }
         }
     }
 
     private func save() {
         errorMessage = nil
+        successMessage = nil
         Task {
             do {
                 try await container.applySettings(
                     motionTrackingEnabled: isMotionTrackingEnabled,
+                    motionEventRecordingMode: motionEventRecordingMode,
+                    motionEventRetention: motionEventRetention,
                     externalFolderURL: externalFolderURL,
                     screenshotFolderURL: screenshotFolderURL
                 )
@@ -309,6 +451,28 @@ struct SettingsPanel: View {
                     ?? "Не удалось сохранить настройки."
             }
         }
+    }
+}
+
+private struct SettingsDestructiveButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 11, weight: .bold))
+            .foregroundStyle(Color(red: 1.0, green: 0.52, blue: 0.46))
+            .padding(.horizontal, 12)
+            .frame(height: 30)
+            .background(
+                Color(red: 0.35, green: 0.12, blue: 0.11)
+                    .opacity(configuration.isPressed ? 0.62 : 0.42)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .stroke(Color(red: 0.75, green: 0.25, blue: 0.22).opacity(0.58), lineWidth: 1)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+            .opacity(isEnabled ? 1 : 0.42)
     }
 }
 

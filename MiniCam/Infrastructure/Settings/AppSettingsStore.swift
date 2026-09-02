@@ -8,12 +8,19 @@ final class AppSettingsStore {
         self.defaults = defaults
     }
 
-    func load() -> AppSettings {
+    func load(referenceDate: Date = Date()) -> AppSettings {
         guard
             let data = defaults.data(forKey: key),
-            let settings = try? JSONDecoder().decode(AppSettings.self, from: data)
+            var settings = try? JSONDecoder().decode(AppSettings.self, from: data)
         else {
-            return .default
+            var settings = AppSettings.default
+            settings.lastMotionEventCleanupAt = referenceDate
+            try? save(settings)
+            return settings
+        }
+        if settings.lastMotionEventCleanupAt == nil {
+            settings.lastMotionEventCleanupAt = referenceDate
+            try? save(settings)
         }
         return settings
     }

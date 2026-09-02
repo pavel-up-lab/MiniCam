@@ -2,6 +2,17 @@ import XCTest
 @testable import MiniCam
 
 final class MotionEventTrackerTests: XCTestCase {
+    func testPeopleOnlyRecordingModeExcludesEveryTransportCategory() {
+        let allowed = MotionObjectCategory.allCases.filter(
+            MotionEventRecordingMode.peopleOnly.allows
+        )
+
+        XCTAssertEqual(allowed, [.person])
+        XCTAssertTrue(MotionObjectCategory.allCases.allSatisfy(
+            MotionEventRecordingMode.peopleAndVehicles.allows
+        ))
+    }
+
     func testStandardSensitivityTracksThirtyPercentConfidenceMovement() {
         var tracker = MotionEventTracker()
 

@@ -18,6 +18,7 @@ final class ArchiveMotionAnalyzer: ObservableObject {
     @Published private(set) var isAnalyzing = false
     @Published private(set) var hasLoadedStoredEvents = false
     @Published private(set) var isMotionTrackingEnabled = true
+    @Published private(set) var motionEventRecordingMode: MotionEventRecordingMode = .peopleAndVehicles
 
     let sampler = ArchiveFrameSampler()
 
@@ -121,6 +122,21 @@ final class ArchiveMotionAnalyzer: ObservableObject {
         }
     }
 
+    func setMotionEventRecordingMode(_ mode: MotionEventRecordingMode) {
+        guard motionEventRecordingMode != mode else { return }
+        motionEventRecordingMode = mode
+        tracker = MotionEventTracker()
+        previousAnalysisSample = nil
+    }
+
+    func pruneEventHistory(olderThan cutoff: Date) async throws {
+        try await performMaintenance(.prune(cutoff))
+    }
+
+    func clearEventHistory() async throws {
+        try await performMaintenance(.clear)
+    }
+
     private func beginProcessingIfNeeded() {
         guard runGate.canBeginProcessing else { return }
         guard analysisTask == nil else { return }
@@ -186,7 +202,10 @@ final class ArchiveMotionAnalyzer: ObservableObject {
 
             guard let previousSample = previousAnalysisSample else {
                 let detections = try await detector.detect(in: sample.image)
-                _ = tracker.process(detections, at: sample.capturedAt)
+                _ = tracker.process(
+                    allowedDetections(detections),
+                    at: sample.capturedAt
+                )
                 previousAnalysisSample = sample
                 continue
             }
@@ -194,7 +213,10 @@ final class ArchiveMotionAnalyzer: ObservableObject {
             let separation = sample.capturedAt.timeIntervalSince(previousSample.capturedAt)
             guard separation > 0, separation <= 8 else {
                 let detections = try await detector.detect(in: sample.image)
-                _ = tracker.process(detections, at: sample.capturedAt)
+                _ = tracker.process(
+                    allowedDetections(detections),
+                    at: sample.capturedAt
+                )
                 previousAnalysisSample = sample
                 continue
             }
@@ -223,7 +245,7 @@ final class ArchiveMotionAnalyzer: ObservableObject {
             }
             if
                 let candidate = tracker.process(
-                    deduplicated(detections),
+                    allowedDetections(deduplicated(detections)),
                     at: sample.capturedAt
                 ),
                 isMotionTrackingEnabled
@@ -232,6 +254,44 @@ final class ArchiveMotionAnalyzer: ObservableObject {
             }
             previousAnalysisSample = sample
         }
+    }
+
+    private func allowedDetections(_ detections: [ObjectDetection]) -> [ObjectDetection] {
+        detections.filter { motionEventRecordingMode.allows($0.category) }
+    }
+
+    private func performMaintenance(_ action: MotionEventMaintenance) async throws {
+        let shouldResume = runGate.canBeginProcessing
+        runGate.suspend()
+        let activeTask = analysisTask
+        activeTask?.cancel()
+        sampler.stop()
+        await activeTask?.value
+
+        do {
+            switch action {
+            case let .prune(cutoff):
+                events = try await store.prune(olderThan: cutoff)
+            case .clear:
+                events = try await store.clear()
+            }
+        } catch {
+            if let storedEvents = try? await store.load() {
+                events = storedEvents
+            }
+            restoreAfterMaintenance(shouldResume: shouldResume)
+            throw error
+        }
+
+        tracker = MotionEventTracker()
+        previousAnalysisSample = nil
+        restoreAfterMaintenance(shouldResume: shouldResume)
+    }
+
+    private func restoreAfterMaintenance(shouldResume: Bool) {
+        guard shouldResume else { return }
+        runGate.resume()
+        beginProcessingIfNeeded()
     }
 
     private func deduplicated(_ detections: [ObjectDetection]) -> [ObjectDetection] {
@@ -271,4 +331,9 @@ final class ArchiveMotionAnalyzer: ObservableObject {
         events.removeAll { $0.id == event.id }
         events.insert(event, at: 0)
     }
+}
+
+private enum MotionEventMaintenance {
+    case prune(Date)
+    case clear
 }
