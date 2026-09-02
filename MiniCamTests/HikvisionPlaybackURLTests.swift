@@ -18,4 +18,22 @@ final class HikvisionPlaybackURLTests: XCTestCase {
 
         XCTAssertEqual(startTime, "20260901T112233Z")
     }
+
+    func testBoundedPlaybackURLReplacesBothArchiveLimits() throws {
+        let formatter = ISO8601DateFormatter()
+        let start = try XCTUnwrap(formatter.date(from: "2026-09-01T11:22:33Z"))
+        let end = try XCTUnwrap(formatter.date(from: "2026-09-01T11:22:48Z"))
+        let source = try XCTUnwrap(URL(string:
+            "rtsp://camera/archive?starttime=old&endtime=old"
+        ))
+
+        let result = try XCTUnwrap(HikvisionPlaybackURL.bounded(source, from: start, to: end))
+        let components = try XCTUnwrap(URLComponents(url: result, resolvingAgainstBaseURL: false))
+        let values = Dictionary(uniqueKeysWithValues:
+            (components.queryItems ?? []).map { ($0.name, $0.value) }
+        )
+
+        XCTAssertEqual(values["starttime"]!, "20260901T112233Z")
+        XCTAssertEqual(values["endtime"]!, "20260901T112248Z")
+    }
 }

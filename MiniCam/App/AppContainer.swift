@@ -19,6 +19,7 @@ final class AppContainer: ObservableObject {
     let playbackController = VLCPlaybackController()
     let archivePreviewController: ArchivePreviewController
     let frameCacheRecorder: FrameCacheRecorder
+    let motionAnalyzer: ArchiveMotionAnalyzer
 
     private let stepResolver = ArchiveStepResolver(liveSnapInterval: 3)
     private let continuationResolver = ArchiveContinuationResolver(
@@ -42,6 +43,7 @@ final class AppContainer: ObservableObject {
         self.frameCacheStore = frameCacheStore
         archivePreviewController = ArchivePreviewController(store: frameCacheStore)
         frameCacheRecorder = FrameCacheRecorder(store: frameCacheStore)
+        motionAnalyzer = ArchiveMotionAnalyzer(frameCacheStore: frameCacheStore)
         self.profileStore = profileStore
         self.credentialStore = credentialStore
         profile = profileStore.load()
@@ -61,10 +63,12 @@ final class AppContainer: ObservableObject {
         }
 
         frameCacheRecorder.stop()
+        motionAnalyzer.stop()
         stopArchiveRefresh()
         cancelArchiveContinuation()
         archivePreviewController.cancelAndHide()
         connectionState = .checking
+        let analysisStart = Date()
         let client = HikvisionClient(profile: profile, credentials: credentials)
 
         do {
@@ -84,13 +88,10 @@ final class AppContainer: ObservableObject {
             }
             connectionState = .connected(identity)
             isReady = true
+            motionAnalyzer.start(at: analysisStart, credentials: credentials)
+            motionAnalyzer.enqueueNewArchive(from: recordingSegments)
             playLive()
             startArchiveRefresh()
-            frameCacheRecorder.start(
-                client: client,
-                profile: profile,
-                credentials: credentials
-            )
         } catch {
             let message = (error as? LocalizedError)?.errorDescription
                 ?? "Не удалось подключиться к камере."
@@ -249,6 +250,7 @@ final class AppContainer: ObservableObject {
             let older = recordingSegments.filter { $0.end <= start }
             recordingSegments = (older + recent).sorted { $0.start < $1.start }
             archiveSegmentCount = recordingSegments.count
+            motionAnalyzer.enqueueNewArchive(from: recordingSegments)
             return recordingSegments
         } catch {
             return recordingSegments

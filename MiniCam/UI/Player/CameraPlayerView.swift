@@ -9,6 +9,9 @@ struct CameraPlayerView: View {
     @State private var isScrubbing = false
     @State private var isTimelineExpanded = true
     @State private var isCalendarPresented = false
+    @State private var isMotionPanelExpanded = false
+    @State private var knownMotionEventIDs: Set<UUID> = []
+    @State private var unreadMotionEventCount = 0
     @State private var transitionBaselineID = 0
     @State private var expectedTransitionID: Int?
     @State private var isWaitingForPlaybackStart = false
@@ -18,6 +21,10 @@ struct CameraPlayerView: View {
         ZStack(alignment: .bottom) {
             Color.black.ignoresSafeArea()
             VLCVideoSurface(videoView: container.frameCacheRecorder.videoView)
+                .frame(width: 1, height: 1)
+                .opacity(0.01)
+                .allowsHitTesting(false)
+            VLCVideoSurface(videoView: container.motionAnalyzer.sampler.videoView)
                 .frame(width: 1, height: 1)
                 .opacity(0.01)
                 .allowsHitTesting(false)
@@ -34,6 +41,26 @@ struct CameraPlayerView: View {
                 )
                 .padding(16)
 
+            MotionEventsPanel(
+                analyzer: container.motionAnalyzer,
+                isExpanded: $isMotionPanelExpanded,
+                unreadCount: unreadMotionEventCount
+            ) { event in
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    isMotionPanelExpanded = false
+                }
+                selectedDate = event.startedAt
+                beginPreviewTransitionIfNeeded()
+                container.seek(to: event.startedAt)
+            }
+            .frame(
+                maxWidth: .infinity,
+                maxHeight: .infinity,
+                alignment: .trailing
+            )
+            .padding(.top, 70)
+            .padding(.bottom, isTimelineExpanded ? 150 : 70)
+
             VStack(spacing: 12) {
                 statusRow
                 timeline
@@ -49,6 +76,28 @@ struct CameraPlayerView: View {
         .onReceive(playback.$currentDate) { date in
             guard !isScrubbing else { return }
             selectedDate = date
+        }
+        .onReceive(container.motionAnalyzer.$events) { events in
+            let ids = Set(events.map(\.id))
+            guard container.motionAnalyzer.hasLoadedStoredEvents else {
+                knownMotionEventIDs = ids
+                return
+            }
+            let newCount = ids.subtracting(knownMotionEventIDs).count
+            knownMotionEventIDs = ids
+            if !isMotionPanelExpanded {
+                unreadMotionEventCount += newCount
+            }
+        }
+        .onReceive(container.motionAnalyzer.$hasLoadedStoredEvents) { loaded in
+            if loaded {
+                knownMotionEventIDs = Set(container.motionAnalyzer.events.map(\.id))
+            }
+        }
+        .onChange(of: isMotionPanelExpanded) { expanded in
+            if expanded {
+                unreadMotionEventCount = 0
+            }
         }
         .onReceive(playback.$transitionID) { transitionID in
             guard

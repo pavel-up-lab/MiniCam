@@ -36,7 +36,7 @@ actor MotionEventStore {
         return try storedEvents().sorted { $0.startedAt > $1.startedAt }
     }
 
-    func imageURL(for event: MotionEvent) -> URL {
+    nonisolated func imageURL(for event: MotionEvent) -> URL {
         directory.appendingPathComponent(event.imageFileName)
     }
 
