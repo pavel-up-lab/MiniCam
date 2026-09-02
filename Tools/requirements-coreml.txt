@@ -1,0 +1,7 @@
+coremltools==8.3.0
+loguru==0.7.3
+numpy==1.26.4
+opencv-python==4.10.0.84
+psutil==7.2.2
+torch==2.2.2
+torchvision==0.17.2
