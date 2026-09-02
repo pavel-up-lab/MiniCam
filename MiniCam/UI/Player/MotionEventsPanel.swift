@@ -29,8 +29,10 @@ struct MotionEventsPanel: View {
                 } label: {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 12, weight: .bold))
-                        .frame(width: 28, height: 28)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
                 }
+                .padding(-8)
                 .buttonStyle(.plain)
                 .foregroundStyle(accent)
                 .help("Свернуть события")

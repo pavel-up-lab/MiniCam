@@ -16,7 +16,7 @@ struct MotionEventTracker {
         let absenceTimeout: TimeInterval
 
         static let standard = Configuration(
-            minimumConfidence: 0.45,
+            minimumConfidence: 0.30,
             minimumIntersection: 0.2,
             maximumCenterDistance: 0.15,
             minimumMovementDistance: 0.01,

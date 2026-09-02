@@ -29,7 +29,7 @@ actor YOLOXObjectDetector {
     private let suppressionThreshold: Double
 
     init(
-        minimumConfidence: Double = 0.45,
+        minimumConfidence: Double = 0.30,
         suppressionThreshold: Double = 0.45
     ) throws {
         let configuration = MLModelConfiguration()

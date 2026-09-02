@@ -2,6 +2,25 @@ import XCTest
 @testable import MiniCam
 
 final class MotionEventTrackerTests: XCTestCase {
+    func testStandardSensitivityTracksThirtyPercentConfidenceMovement() {
+        var tracker = MotionEventTracker()
+
+        let appeared = tracker.process(
+            [detection(confidence: 0.30, x: 0.10)],
+            at: date(0)
+        )
+        let startedMoving = tracker.process(
+            [detection(confidence: 0.30, x: 0.13)],
+            at: date(0.5)
+        )
+
+        XCTAssertNil(appeared)
+        XCTAssertEqual(
+            startedMoving,
+            MotionEventCandidate(startedAt: date(0), categories: [.person])
+        )
+    }
+
     func testStationaryObjectCreatesOneEventOnlyWhenMovementStarts() {
         var tracker = MotionEventTracker()
 
@@ -78,11 +97,12 @@ final class MotionEventTrackerTests: XCTestCase {
 
     private func detection(
         category: MotionObjectCategory = .person,
+        confidence: Double = 0.9,
         x: Double
     ) -> ObjectDetection {
         ObjectDetection(
             category: category,
-            confidence: 0.9,
+            confidence: confidence,
             bounds: CGRect(x: x, y: 0.20, width: 0.10, height: 0.30)
         )
     }

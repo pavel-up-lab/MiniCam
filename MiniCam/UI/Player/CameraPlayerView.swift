@@ -71,7 +71,7 @@ struct CameraPlayerView: View {
                 alignment: .trailing
             )
             .padding(.top, 70)
-            .padding(.bottom, isTimelineExpanded ? 150 : 70)
+            .padding(.bottom, motionPanelBottomPadding)
 
             VStack(spacing: 12) {
                 statusRow
@@ -144,6 +144,11 @@ struct CameraPlayerView: View {
             screenshotNoticeTask?.cancel()
             preview.cancelAndHide()
         }
+    }
+
+    private var motionPanelBottomPadding: CGFloat {
+        let timelinePadding: CGFloat = isTimelineExpanded ? 150 : 70
+        return timelinePadding + (isMotionPanelExpanded ? 50 : 0)
     }
 
     private var topRightControls: some View {

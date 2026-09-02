@@ -14,6 +14,9 @@ struct ArchiveFrameSample {
 final class ArchiveFrameSampler: NSObject {
     let videoView = VLCVideoView(frame: .zero)
 
+    private static let playbackRate: Float = 2
+    private static let captureInterval: TimeInterval = 0.5
+
     private struct PendingSnapshot {
         let capturedAt: Date
         let fileURL: URL
@@ -75,7 +78,7 @@ final class ArchiveFrameSampler: NSObject {
                 media.addOption(":rtsp-user=\(credentials.username)")
                 media.addOption(":rtsp-pwd=\(credentials.password)")
                 player.media = media
-                player.rate = 4
+                player.rate = Self.playbackRate
                 player.play()
 
                 let duration = max(15, slice.end.timeIntervalSince(slice.start) + 8)
@@ -139,7 +142,7 @@ final class ArchiveFrameSampler: NSObject {
         snapshotTimeoutTask = nil
 
         let currentElapsed = max(0, (player.time.value?.doubleValue ?? 0) / 1_000)
-        nextCaptureOffset = floor(currentElapsed) + 1
+        nextCaptureOffset = nextCaptureTime(after: currentElapsed)
 
         Task { [weak self] in
             let sample = await Task.detached(priority: .utility) {
@@ -164,7 +167,7 @@ final class ArchiveFrameSampler: NSObject {
         snapshotTimeoutTask = nil
         try? FileManager.default.removeItem(at: snapshot.fileURL)
         let elapsed = max(0, (player.time.value?.doubleValue ?? 0) / 1_000)
-        nextCaptureOffset = floor(elapsed) + 1
+        nextCaptureOffset = nextCaptureTime(after: elapsed)
         if hasEnded {
             complete(.success(samples))
         } else {
@@ -177,6 +180,11 @@ final class ArchiveFrameSampler: NSObject {
         if pendingSnapshot == nil {
             complete(.success(samples))
         }
+    }
+
+    private func nextCaptureTime(after elapsed: TimeInterval) -> TimeInterval {
+        let interval = Self.captureInterval
+        return (floor(elapsed / interval) + 1) * interval
     }
 
     private func playbackTimeChanged() {
@@ -247,7 +255,7 @@ extension ArchiveFrameSampler: VLCMediaPlayerDelegate {
             guard let self else { return }
             switch self.player.state {
             case .playing:
-                self.player.rate = 4
+                self.player.rate = Self.playbackRate
                 self.captureIfNeeded()
             case .ended:
                 self.playbackEnded()
