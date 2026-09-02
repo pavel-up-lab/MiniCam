@@ -76,6 +76,12 @@ struct CameraPlayerView: View {
             }
             .padding(16)
             .background(.black.opacity(0.72))
+
+            if isSettingsPresented {
+                settingsOverlay
+                    .zIndex(100)
+                    .transition(.opacity.combined(with: .scale(scale: 0.97)))
+            }
         }
         .onAppear {
             if case .loading = playback.state {
@@ -138,7 +144,9 @@ struct CameraPlayerView: View {
 
     private var settingsButton: some View {
         Button {
-            isSettingsPresented.toggle()
+            withAnimation(.easeOut(duration: 0.16)) {
+                isSettingsPresented = true
+            }
         } label: {
             ZStack(alignment: .topTrailing) {
                 Image(systemName: "gearshape.fill")
@@ -162,9 +170,26 @@ struct CameraPlayerView: View {
         .buttonStyle(.plain)
         .help("Настройки")
         .accessibilityLabel("Открыть настройки")
-        .popover(isPresented: $isSettingsPresented, arrowEdge: .top) {
-            SettingsPanel(isPresented: $isSettingsPresented)
-                .environmentObject(container)
+    }
+
+    private var settingsOverlay: some View {
+        ZStack {
+            Color.black.opacity(0.58)
+                .ignoresSafeArea()
+                .contentShape(Rectangle())
+
+            SettingsPanel(
+                onCancel: closeSettings,
+                onSaved: closeSettings
+            )
+            .environmentObject(container)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+    }
+
+    private func closeSettings() {
+        withAnimation(.easeIn(duration: 0.14)) {
+            isSettingsPresented = false
         }
     }
 
