@@ -30,6 +30,7 @@ final class VLCPlaybackController: NSObject, ObservableObject {
     private var stopFallbackTask: Task<Void, Never>?
     private var releaseDelayTask: Task<Void, Never>?
     private var pendingScreenshot: PendingScreenshot?
+    private var pauseWhenReady = false
 
     private static let cameraReleaseDelayNanoseconds: UInt64 = 400_000_000
 
@@ -97,12 +98,41 @@ final class VLCPlaybackController: NSObject, ObservableObject {
 
     func stop() {
         isPaused = false
+        pauseWhenReady = false
         transitionQueue.reset()
         stopFallbackTask?.cancel()
         stopFallbackTask = nil
         releaseDelayTask?.cancel()
         releaseDelayTask = nil
         player.stop()
+    }
+
+    func pauseAfterNextFrame() {
+        pauseWhenReady = true
+    }
+
+    func releaseForExternalTransport() async {
+        playbackWillTransition?()
+        let releasedAt = currentDate
+        isPaused = false
+        pauseWhenReady = false
+        transitionQueue.reset()
+        stopFallbackTask?.cancel()
+        stopFallbackTask = nil
+        releaseDelayTask?.cancel()
+        releaseDelayTask = nil
+        player.stop()
+        hasLoadedMedia = false
+        activeSegment = nil
+        activePlaybackStart = nil
+        state = .loading(releasedAt)
+
+        do {
+            try await Task.sleep(nanoseconds: 900_000_000)
+        } catch {
+            return
+        }
+        replacePlayer()
     }
 
     func pause() {
@@ -363,6 +393,11 @@ extension VLCPlaybackController: VLCMediaPlayerDelegate {
                 self.frameRevision += 1
                 self.readyTransitionID = self.transitionID
                 self.playbackTransitionDidFinish?()
+                if self.pauseWhenReady {
+                    self.pauseWhenReady = false
+                    self.player.pause()
+                    self.isPaused = true
+                }
 #if DEBUG
                 print("[Playback] first frame revision=\(self.frameRevision)")
 #endif

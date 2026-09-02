@@ -19,6 +19,8 @@ struct CameraPlayerView: View {
     @State private var transitionTimeoutTask: Task<Void, Never>?
     @State private var screenshotNotice: ScreenshotNotice?
     @State private var screenshotNoticeTask: Task<Void, Never>?
+    @State private var clipStart: Date?
+    @State private var clipEnd: Date?
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -61,6 +63,7 @@ struct CameraPlayerView: View {
                 withAnimation(.easeInOut(duration: 0.2)) {
                     isMotionPanelExpanded = false
                 }
+                clearClipSelection()
                 selectedDate = event.startedAt
                 beginPreviewTransitionIfNeeded()
                 container.seek(to: event.startedAt)
@@ -94,6 +97,11 @@ struct CameraPlayerView: View {
         .onReceive(playback.$currentDate) { date in
             guard !isScrubbing else { return }
             selectedDate = date
+        }
+        .onReceive(playback.$isPaused) { isPaused in
+            if !isPaused {
+                clearClipSelection()
+            }
         }
         .onReceive(container.motionAnalyzer.$events) { events in
             let ids = Set(events.map(\.id))
@@ -133,6 +141,7 @@ struct CameraPlayerView: View {
         }
         .onChange(of: isTimelineExpanded) { expanded in
             if !expanded {
+                clearClipSelection()
                 transitionTimeoutTask?.cancel()
                 expectedTransitionID = nil
                 isWaitingForPlaybackStart = false
@@ -154,6 +163,7 @@ struct CameraPlayerView: View {
     private var topRightControls: some View {
         VStack(alignment: .trailing, spacing: 8) {
             HStack(spacing: 8) {
+                videoClipButton
                 screenshotButton
                 settingsButton
             }
@@ -174,6 +184,37 @@ struct CameraPlayerView: View {
                     .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
+    }
+
+    private var videoClipButton: some View {
+        Button(action: exportVideoClip) {
+            ZStack {
+                Image(systemName: container.isExportingVideo ? "hourglass" : "video.fill")
+                    .font(.system(size: 15, weight: .semibold))
+
+                if container.isExportingVideo {
+                    Circle()
+                        .trim(from: 0, to: max(0.03, container.videoExportProgress))
+                        .stroke(
+                            Color(red: 0.73, green: 0.95, blue: 0.18),
+                            style: StrokeStyle(lineWidth: 2, lineCap: .round)
+                        )
+                        .rotationEffect(.degrees(-90))
+                        .frame(width: 31, height: 31)
+                }
+            }
+            .foregroundStyle(Color(red: 0.73, green: 0.95, blue: 0.18))
+            .frame(width: 42, height: 42)
+            .background(
+                Color.black.opacity(0.72),
+                in: RoundedRectangle(cornerRadius: 9, style: .continuous)
+            )
+        }
+        .buttonStyle(.plain)
+        .disabled(!canExportVideoClip)
+        .opacity(canExportVideoClip || container.isExportingVideo ? 1 : 0.42)
+        .help("Сохранить выбранный фрагмент")
+        .accessibilityLabel("Сохранить выбранный видеоролик")
     }
 
     private var screenshotButton: some View {
@@ -255,6 +296,52 @@ struct CameraPlayerView: View {
         }
     }
 
+    private var canExportVideoClip: Bool {
+        guard
+            playback.isPaused,
+            !container.isExportingVideo,
+            let clipStart,
+            let clipEnd
+        else {
+            return false
+        }
+        return (try? VideoClipSelectionResolver().resolve(
+            from: clipStart,
+            to: clipEnd,
+            segments: container.recordingSegments
+        )) != nil
+    }
+
+    private func exportVideoClip() {
+        guard let clipStart, let clipEnd else { return }
+        screenshotNoticeTask?.cancel()
+        Task {
+            do {
+                let fileURL = try await container.exportVideoClip(
+                    from: clipStart,
+                    to: clipEnd
+                )
+                clearClipSelection()
+                showScreenshotNotice(
+                    ScreenshotNotice(
+                        message: "Сохранён \(fileURL.lastPathComponent)",
+                        symbol: "checkmark.circle.fill",
+                        isError: false
+                    )
+                )
+            } catch {
+                showScreenshotNotice(
+                    ScreenshotNotice(
+                        message: (error as? LocalizedError)?.errorDescription
+                            ?? "Не удалось сохранить ролик.",
+                        symbol: "exclamationmark.triangle.fill",
+                        isError: true
+                    )
+                )
+            }
+        }
+    }
+
     private func takeScreenshot() {
         screenshotNoticeTask?.cancel()
         Task {
@@ -321,6 +408,7 @@ struct CameraPlayerView: View {
                 initialDate: selectedDate
             ) { date in
                 isCalendarPresented = false
+                clearClipSelection()
                 selectedDate = date
                 beginPreviewTransitionIfNeeded()
                 container.seek(to: date)
@@ -342,6 +430,7 @@ struct CameraPlayerView: View {
                 Spacer()
 
                 Button("В эфир") {
+                    clearClipSelection()
                     beginPreviewTransitionIfNeeded()
                     container.playLive()
                 }
@@ -370,8 +459,16 @@ struct CameraPlayerView: View {
                 PlaybackControlsView(
                     isPaused: playback.isPaused,
                     isEnabled: transportControlsEnabled,
-                    onStep: container.step,
-                    onTogglePlayback: container.togglePlayback
+                    onStep: { offset in
+                        clearClipSelection()
+                        container.step(by: offset)
+                    },
+                    onTogglePlayback: {
+                        if playback.isPaused {
+                            clearClipSelection()
+                        }
+                        container.togglePlayback()
+                    }
                 )
             }
         }
@@ -381,11 +478,18 @@ struct CameraPlayerView: View {
         ArchiveTimelineView(
             selectedDate: $selectedDate,
             isInteracting: $isScrubbing,
+            clipStart: $clipStart,
+            clipEnd: $clipEnd,
             isExpanded: isTimelineExpanded,
+            isPaused: playback.isPaused,
             range: timelineStart...timelineEnd,
             segments: container.recordingSegments,
-            onPreview: container.preview,
+            onPreview: { date in
+                clearClipSelection()
+                container.preview(at: date)
+            },
             onCommit: { date in
+                clearClipSelection()
                 beginPreviewTransitionIfNeeded()
                 container.seek(to: date)
             }
@@ -507,6 +611,11 @@ struct CameraPlayerView: View {
 
     private func formatted(_ date: Date) -> String {
         date.formatted(date: .abbreviated, time: .standard)
+    }
+
+    private func clearClipSelection() {
+        clipStart = nil
+        clipEnd = nil
     }
 }
 

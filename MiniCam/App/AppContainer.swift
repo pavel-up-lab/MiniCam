@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 
 @MainActor
@@ -22,6 +23,8 @@ final class AppContainer: ObservableObject {
     @Published private(set) var screenshotFolderURL: URL
     @Published private(set) var currentCustomScreenshotFolderURL: URL?
     @Published private(set) var isScreenshotFolderFallback = false
+    @Published private(set) var isExportingVideo = false
+    @Published private(set) var videoExportProgress = 0.0
 
     let playbackController = VLCPlaybackController()
     let archivePreviewController: ArchivePreviewController
@@ -42,9 +45,12 @@ final class AppContainer: ObservableObject {
     private let profileStore: ProfileStore
     private let credentialStore: CredentialStore
     private(set) var cameraClient: HikvisionClient?
+    private var activeCredentials: CameraCredentials?
     private var pausedLiveDate: Date?
     private var archiveRefreshTask: Task<Void, Never>?
     private var archiveContinuationTask: Task<Void, Never>?
+    private var activeVideoExporter: VideoClipExporter?
+    private var applicationTerminationObserver: NSObjectProtocol?
 
     init(
         profileStore: ProfileStore = ProfileStore(),
@@ -110,6 +116,14 @@ final class AppContainer: ObservableObject {
                 ?? settings.externalStorageDisplayPath.map { URL(fileURLWithPath: $0) }
             folderToRestore = currentExternalFolderURL
             externalFolderAccess.replace(with: resolvedURL)
+        }
+
+        applicationTerminationObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.willTerminateNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.activeVideoExporter?.cancel()
         }
 
         let savedCredentials = try? credentialStore.load()
@@ -191,6 +205,63 @@ final class AppContainer: ObservableObject {
         return try await playbackController.saveCurrentFrame(to: screenshotFolderURL)
     }
 
+    func exportVideoClip(from start: Date, to end: Date) async throws -> URL {
+        guard !isExportingVideo else {
+            throw VideoClipExportError.exportAlreadyRunning
+        }
+        guard let credentials = activeCredentials else {
+            throw CameraError.authenticationFailed
+        }
+
+        let selection = try VideoClipSelectionResolver().resolve(
+            from: start,
+            to: end,
+            segments: recordingSegments
+        )
+        let outputFolder = try resolveMediaOutputFolder()
+        let restorePoint = try makeVideoRestorePoint()
+        let exporter = try VideoClipExporter()
+        activeVideoExporter = exporter
+
+        isExportingVideo = true
+        videoExportProgress = 0
+        cancelArchiveContinuation()
+        isTransportBusy = true
+        stopArchiveRefresh()
+        motionAnalyzer.suspendSampling()
+        frameCacheRecorder.stop()
+        await playbackController.releaseForExternalTransport()
+
+        let result: Result<URL, Error>
+        do {
+            let fileURL = try await exporter.export(
+                selection: selection,
+                credentials: credentials,
+                to: outputFolder
+            ) { [weak self] progress in
+                self?.videoExportProgress = progress
+            }
+            result = .success(fileURL)
+        } catch {
+            result = .failure(error)
+        }
+
+        await restorePlayback(after: restorePoint)
+        if let cameraClient {
+            frameCacheRecorder.start(
+                client: cameraClient,
+                profile: profile,
+                credentials: credentials
+            )
+        }
+        startArchiveRefresh()
+        isTransportBusy = false
+        isExportingVideo = false
+        videoExportProgress = 0
+        activeVideoExporter = nil
+        return try result.get()
+    }
+
     private func prepareScreenshotFolder(
         _ folderURL: URL?
     ) throws -> (bookmark: Data?, displayPath: String?) {
@@ -209,6 +280,65 @@ final class AppContainer: ObservableObject {
         }
         let bookmark = try ExternalFolderBookmark.make(for: folderURL)
         return (bookmark, folderURL.path)
+    }
+
+    private func resolveMediaOutputFolder() throws -> URL {
+        if let customFolder = currentCustomScreenshotFolderURL {
+            guard Self.isWritableDirectory(customFolder) else {
+                screenshotFolderURL = Self.defaultScreenshotFolder
+                isScreenshotFolderFallback = true
+                guard Self.isWritableDirectory(screenshotFolderURL) else {
+                    throw VideoClipExportError.folderUnavailable
+                }
+                return screenshotFolderURL
+            }
+            screenshotFolderURL = customFolder
+            isScreenshotFolderFallback = false
+        }
+        guard Self.isWritableDirectory(screenshotFolderURL) else {
+            throw VideoClipExportError.folderUnavailable
+        }
+        return screenshotFolderURL
+    }
+
+    private func makeVideoRestorePoint() throws -> VideoPlaybackRestorePoint {
+        switch playbackController.state {
+        case .live:
+            return VideoPlaybackRestorePoint(
+                source: .live,
+                date: playbackController.currentDate,
+                wasPaused: playbackController.isPaused
+            )
+        case .archive:
+            return VideoPlaybackRestorePoint(
+                source: .archive,
+                date: playbackController.currentDate,
+                wasPaused: playbackController.isPaused
+            )
+        case .loading, .failed:
+            throw VideoClipExportError.playbackUnavailable
+        }
+    }
+
+    private func restorePlayback(after point: VideoPlaybackRestorePoint) async {
+        if point.source == .live, !point.wasPaused {
+            playLive()
+            return
+        }
+
+        let segments = await refreshRecentRecordings(
+            from: point.date.addingTimeInterval(-120)
+        )
+        if point.wasPaused {
+            playbackController.pauseAfterNextFrame()
+        }
+        if let segment = segments.first(where: { $0.contains(point.date) }) {
+            playbackController.playArchive(segment: segment, at: point.date)
+        } else if let next = segments.first(where: { $0.start > point.date }) {
+            playbackController.playArchive(segment: next, at: next.start)
+        } else {
+            playbackController.playLive()
+        }
     }
 
     private func applyScreenshotFolder(_ folderURL: URL?) {
@@ -269,6 +399,7 @@ final class AppContainer: ObservableObject {
         motionAnalyzer.stop()
         stopArchiveRefresh()
         cancelArchiveContinuation()
+        activeCredentials = nil
         archivePreviewController.cancelAndHide()
         connectionState = .checking
         let analysisStart = Date()
@@ -283,6 +414,7 @@ final class AppContainer: ObservableObject {
 
             self.profile = profile
             cameraClient = client
+            activeCredentials = credentials
             recordingSegments = segments.sorted { $0.start < $1.start }
             archiveSegmentCount = segments.count
             playbackController.configure(profile: profile, credentials: credentials)
@@ -541,6 +673,17 @@ final class AppContainer: ObservableObject {
         archiveContinuationTask = nil
         isTransportBusy = false
     }
+}
+
+private struct VideoPlaybackRestorePoint {
+    enum Source: Equatable {
+        case live
+        case archive
+    }
+
+    let source: Source
+    let date: Date
+    let wasPaused: Bool
 }
 
 enum SettingsApplyError: LocalizedError {

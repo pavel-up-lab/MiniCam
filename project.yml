@@ -31,6 +31,12 @@ targets:
     platform: macOS
     sources:
       - path: MiniCam
+      - path: THIRD_PARTY_NOTICES.md
+        buildPhase: resources
+      - path: ThirdPartyLicenses/FFmpeg-LGPL-2.1.txt
+        buildPhase: resources
+      - path: MiniCam/Resources/ffmpeg
+        buildPhase: resources
     info:
       path: MiniCam/Resources/Info.plist
     settings:

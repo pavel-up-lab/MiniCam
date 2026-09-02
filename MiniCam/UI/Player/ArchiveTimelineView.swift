@@ -3,8 +3,11 @@ import SwiftUI
 struct ArchiveTimelineView: View {
     @Binding var selectedDate: Date
     @Binding var isInteracting: Bool
+    @Binding var clipStart: Date?
+    @Binding var clipEnd: Date?
 
     let isExpanded: Bool
+    let isPaused: Bool
     let range: ClosedRange<Date>
     let segments: [RecordingSegment]
     let onPreview: (Date) -> Void
@@ -13,6 +16,7 @@ struct ArchiveTimelineView: View {
     @State private var dragAnchor: Date?
     @State private var overviewPosition = 1.0
     @State private var isOverviewEditing = false
+    @State private var clipDragAnchorEnd: Date?
 
     private let scale = ArchiveTimelineScale(
         secondsPerPoint: 0.5,
@@ -69,7 +73,7 @@ struct ArchiveTimelineView: View {
     }
 
     private var detailTimeline: some View {
-        GeometryReader { _ in
+        GeometryReader { proxy in
             ZStack {
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
                     .fill(Color.white.opacity(0.07))
@@ -86,12 +90,66 @@ struct ArchiveTimelineView: View {
                     .frame(width: 2)
                     .shadow(color: accent.opacity(0.7), radius: 5)
                     .allowsHitTesting(false)
+
+                clipSelectionOverlay(size: proxy.size)
             }
             .contentShape(Rectangle())
             .gesture(detailDrag)
             .accessibilityLabel("Точная шкала архива")
             .accessibilityValue(selectedDate.formatted(date: .abbreviated, time: .standard))
         }
+    }
+
+    @ViewBuilder
+    private func clipSelectionOverlay(size: CGSize) -> some View {
+        let start = clipStart ?? selectedDate
+        let end = clipEnd ?? start
+        let width = max(
+            0,
+            min(
+                size.width / 2,
+                CGFloat(end.timeIntervalSince(start) / scale.secondsPerPoint)
+            )
+        )
+        let centerX = size.width / 2
+
+        if width > 0 {
+            Rectangle()
+                .fill(accent.opacity(0.2))
+                .frame(width: width, height: size.height - 12)
+                .position(x: centerX + width / 2, y: (size.height - 12) / 2)
+                .allowsHitTesting(false)
+
+            Rectangle()
+                .fill(Color.white.opacity(0.9))
+                .frame(width: 2, height: size.height - 12)
+                .position(x: centerX + width, y: (size.height - 12) / 2)
+                .allowsHitTesting(false)
+
+            Text(Self.durationText(end.timeIntervalSince(start)))
+                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 6)
+                .frame(height: 18)
+                .background(Color.black.opacity(0.76), in: Capsule())
+                .position(
+                    x: centerX + max(24, width / 2),
+                    y: 10
+                )
+                .allowsHitTesting(false)
+        }
+
+        Image(systemName: "triangle.fill")
+            .font(.system(size: 10, weight: .bold))
+            .foregroundStyle(isPaused ? Color.white : Color.white.opacity(0.5))
+            .frame(width: 44, height: 30, alignment: .bottom)
+            .contentShape(Rectangle())
+            .rotationEffect(.degrees(180))
+            .position(x: centerX + width, y: size.height - 2)
+            .highPriorityGesture(clipEndDrag)
+            .allowsHitTesting(isPaused)
+            .help(isPaused ? "Потяните вправо, чтобы выбрать конец ролика" : "Поставьте видео на паузу")
+            .accessibilityLabel("Конец сохраняемого ролика")
     }
 
     private var overviewTimeline: some View {
@@ -141,6 +199,7 @@ struct ArchiveTimelineView: View {
         DragGesture(minimumDistance: 0)
             .onChanged { value in
                 if dragAnchor == nil {
+                    clearClipSelection()
                     dragAnchor = selectedDate
                     isInteracting = true
                 }
@@ -159,6 +218,36 @@ struct ArchiveTimelineView: View {
                 dragAnchor = nil
                 isInteracting = false
                 onCommit(selectedDate)
+            }
+    }
+
+    private var clipEndDrag: some Gesture {
+        DragGesture(minimumDistance: 0)
+            .onChanged { value in
+                guard isPaused else { return }
+                if clipDragAnchorEnd == nil {
+                    let start = clipStart ?? selectedDate
+                    clipStart = start
+                    clipEnd = clipEnd ?? start
+                    clipDragAnchorEnd = clipEnd
+                    isInteracting = true
+                }
+
+                guard
+                    let start = clipStart,
+                    let anchorEnd = clipDragAnchorEnd,
+                    let availableEnd = VideoClipSelectionResolver()
+                        .latestContinuousEnd(startingAt: start, segments: segments)
+                else {
+                    return
+                }
+                let translatedSeconds = Double(value.translation.width) * scale.secondsPerPoint
+                let candidate = anchorEnd.addingTimeInterval(translatedSeconds)
+                clipEnd = min(max(candidate, start), availableEnd)
+            }
+            .onEnded { _ in
+                clipDragAnchorEnd = nil
+                isInteracting = false
             }
     }
 
@@ -236,5 +325,16 @@ struct ArchiveTimelineView: View {
 
     private func synchronizeOverview() {
         overviewPosition = scale.overviewPosition(for: selectedDate, range: range)
+    }
+
+    private func clearClipSelection() {
+        clipStart = nil
+        clipEnd = nil
+        clipDragAnchorEnd = nil
+    }
+
+    private static func durationText(_ duration: TimeInterval) -> String {
+        let totalSeconds = max(0, Int(duration.rounded()))
+        return String(format: "%02d:%02d", totalSeconds / 60, totalSeconds % 60)
     }
 }

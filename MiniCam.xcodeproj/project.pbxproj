@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		02C94F9B1C7537145BB84FEB /* YOLOXObjectDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E671969669AEB1CC389F94E /* YOLOXObjectDetector.swift */; };
 		040BE09E9C4E51ADBBD12A2A /* FrameCacheRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = E868E0CAC5E6561022884506 /* FrameCacheRecorder.swift */; };
+		056CDAEF39656066F8A7B39D /* VideoClipExporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9E37D800E75DF5B4E58EAE4 /* VideoClipExporter.swift */; };
 		05E0F9E70F6429783CA5A440 /* HikvisionPlaybackURLTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC1EF0E8DF861F3FA84851F4 /* HikvisionPlaybackURLTests.swift */; };
 		074BF12E512826D4C5205F2A /* MotionEventTrackerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 814F30B53FDB19F99101DE04 /* MotionEventTrackerTests.swift */; };
 		0B0008057367E4F584C34E0C /* CameraError.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33B99F35037D0D1A8C76B062 /* CameraError.swift */; };
@@ -30,6 +31,7 @@
 		379BE0E1A05F80439B4FDCB4 /* FrameCacheIndexTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B4EA7F12365722A7D73B8F5 /* FrameCacheIndexTests.swift */; };
 		3AFC51793BF76AAEA93BC91E /* CredentialStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3B758F5D72FEB2799896DD6 /* CredentialStore.swift */; };
 		40A9D64B933F106BFE2C9CE2 /* VLCVideoSurface.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1CC7EB2F634D8DD90C24A0F /* VLCVideoSurface.swift */; };
+		4323225D52C89F51D66AB67A /* VideoClipSelectionResolverTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A1E15F334AE22875E7743BC /* VideoClipSelectionResolverTests.swift */; };
 		449C7B2A6490E57F2C8C299F /* MotionEvent.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDAB26A9E21909588C6CA834 /* MotionEvent.swift */; };
 		4C3243E228D87042CAF741F4 /* ArchiveCalendarAvailability.swift in Sources */ = {isa = PBXBuildFile; fileRef = E771FACE72CD500C2DA5BFC7 /* ArchiveCalendarAvailability.swift */; };
 		4D04C4BB836E25E01961801D /* HikvisionPlaybackURL.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4AF5E48F43A690757E7C1553 /* HikvisionPlaybackURL.swift */; };
@@ -43,10 +45,13 @@
 		6D1301FDBC1DB9CF8F145425 /* AppContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 925502BB35E80295E465B73E /* AppContainer.swift */; };
 		70A06017ABFE7FAE2C170C67 /* ArchiveTimelineScaleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72C2321E2DE3AFC28B3F7B82 /* ArchiveTimelineScaleTests.swift */; };
 		713232F26D0044041D9F5B79 /* ProfileStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = AEF32C2AF41FF52A640DFE7A /* ProfileStore.swift */; };
+		75AF4BC10DC6EB3A654B60ED /* Pods_MiniCam.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 5472B31EE59759F2D7B064AB /* Pods_MiniCam.framework */; };
 		791AEF3C03C672543CCCE40C /* FrameCacheStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47A759229FDCEFF65248F8C5 /* FrameCacheStore.swift */; };
+		7B1A08681B5656F36A0F946D /* THIRD_PARTY_NOTICES.md in Resources */ = {isa = PBXBuildFile; fileRef = 63D9C83CB623D5149AF7575C /* THIRD_PARTY_NOTICES.md */; };
 		7C36717FAAB904FEDDB22D13 /* ArchiveCalendarPopover.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95ACA3BD25379CE1DAC5F53C /* ArchiveCalendarPopover.swift */; };
 		7D107FFBF69EFDE51D2D8FAB /* HikvisionClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 089910A6E21F859646ECAF3E /* HikvisionClient.swift */; };
 		8157EA0C2EFE3446753470DD /* CameraProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = EEC72F6D567EC684A1D8034F /* CameraProfile.swift */; };
+		84CC4E3A7CD8B2C3E415CE34 /* Pods_MiniCamTests.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D96852AF55840EE3ACB2087F /* Pods_MiniCamTests.framework */; };
 		89812E278E3BE9CBC4C3DAF7 /* ArchiveMotionAnalyzer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28EE8342B6160A15D771586C /* ArchiveMotionAnalyzer.swift */; };
 		8BB635812F0FB8090B56471B /* StorageMigrationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03315C9C41E64895239AEE81 /* StorageMigrationService.swift */; };
 		921CBC52055CC4E028CA633D /* ISAPIModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F6E44557CE76A3CD25A5FDD /* ISAPIModels.swift */; };
@@ -59,19 +64,20 @@
 		B068347AA63D421FFF92BEFD /* MotionRegionDetectorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D289754C95D92BB47A85FC1 /* MotionRegionDetectorTests.swift */; };
 		B4E30A267BD57105B2A663BE /* ExternalFolderBookmark.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D04B567339EF6310715D6B8 /* ExternalFolderBookmark.swift */; };
 		C4D5E2724B1A0768DF5FBDA4 /* ArchiveStepResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B65FD058C78067EA96345D6 /* ArchiveStepResolver.swift */; };
+		C6C8897142D263E2D0506E7F /* ffmpeg in Resources */ = {isa = PBXBuildFile; fileRef = A3F43CB2219827BF7C65FF41 /* ffmpeg */; };
 		C7270AB2E537C37171289AB9 /* AppSettingsStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42AF79C5B9732AA778A9B5D4 /* AppSettingsStoreTests.swift */; };
 		CB13F850B4721F268B2D58CA /* ArchiveContinuationResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 917E9DA316545F567AD8CECB /* ArchiveContinuationResolver.swift */; };
 		D30B28EDDC632C6FE2773E2F /* ArchiveAnalysisCursorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C6990913159329B675EE089 /* ArchiveAnalysisCursorTests.swift */; };
-		D6BF36EB53013C8D5A5230C5 /* Pods_MiniCam.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1F8FFA927F3161C92BC90DD7 /* Pods_MiniCam.framework */; };
 		D93140D95596C800C0609AC4 /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58D9662AA6E389C445791AD0 /* AppSettings.swift */; };
 		DAB560063B44922BD0EF09C9 /* DigestSessionDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DFE70DAA0849C0A35B3C234 /* DigestSessionDelegate.swift */; };
 		DBD37337D2CD6A0ECC0AF900 /* PlaybackState.swift in Sources */ = {isa = PBXBuildFile; fileRef = E17B1879D849CF3DF968448C /* PlaybackState.swift */; };
 		DC2847BB6AC4BA1FC7C53FCF /* StorageRootProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CBBFEE684FEC435C8671B62 /* StorageRootProvider.swift */; };
 		E070ECB93DB1A80DCAE34D00 /* ISAPIXMLParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27158E02F2682CFA9B797E9D /* ISAPIXMLParser.swift */; };
 		E0B61BE2CCF0D74A5B26C710 /* PlaybackTransitionQueueTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75FDA0BFDE110ED34F3AF73A /* PlaybackTransitionQueueTests.swift */; };
+		E17A6851817E82F8557B110B /* VideoClipSelection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88AE28FBDA63E0184C3DFD31 /* VideoClipSelection.swift */; };
+		E2050085EBD884FFAB650DC0 /* FFmpeg-LGPL-2.1.txt in Resources */ = {isa = PBXBuildFile; fileRef = CEAC44597AF9FD77CE3C3D4A /* FFmpeg-LGPL-2.1.txt */; };
 		E45A579C7BDCBCE214C741AC /* CameraProfileTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27782A4FD5304B9667222B77 /* CameraProfileTests.swift */; };
 		E4813AE23E2931E79214A356 /* SettingsPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD217579D01893830F46864B /* SettingsPanel.swift */; };
-		EAAEBCACC45F51A4E2CDA31A /* Pods_MiniCamTests.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E9CC6CBDBE94F8BFA57B9BD2 /* Pods_MiniCamTests.framework */; };
 		F441CEE29311317012993EC7 /* MotionEventsPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94E61AFC9BFDE198566226F9 /* MotionEventsPanel.swift */; };
 		FB303D16541F9222E0E1DC18 /* ArchivePreviewControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53AFAA1B2BFDE2561641430D /* ArchivePreviewControllerTests.swift */; };
 		FCF0FAB54503A1C17DD547C4 /* ArchiveAnalysisCursor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04492B6062A28429E462060F /* ArchiveAnalysisCursor.swift */; };
@@ -102,8 +108,6 @@
 		1D384FDB0A0E5DD6564A1297 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		1D3CBF67D2C5C3345BD94956 /* MotionObjectCategory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MotionObjectCategory.swift; sourceTree = "<group>"; };
 		1E13A783C640D2197163E0F3 /* RecordingSegment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingSegment.swift; sourceTree = "<group>"; };
-		1F8FFA927F3161C92BC90DD7 /* Pods_MiniCam.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_MiniCam.framework; sourceTree = BUILT_PRODUCTS_DIR; };
-		2283B7F4F2A2DA7F2F029840 /* Pods-MiniCam.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-MiniCam.debug.xcconfig"; path = "Target Support Files/Pods-MiniCam/Pods-MiniCam.debug.xcconfig"; sourceTree = "<group>"; };
 		23A88A8DCB4ECC7465B281FB /* MiniCamApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiniCamApp.swift; sourceTree = "<group>"; };
 		2712FB149E1840F4D1CECBFC /* PlaybackControlsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackControlsView.swift; sourceTree = "<group>"; };
 		27158E02F2682CFA9B797E9D /* ISAPIXMLParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ISAPIXMLParser.swift; sourceTree = "<group>"; };
@@ -115,7 +119,6 @@
 		3718FE4AAA7FFB1F17AA7D93 /* StorageCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageCoordinator.swift; sourceTree = "<group>"; };
 		3B237DD172902C9234E23CB1 /* CameraCredentials.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraCredentials.swift; sourceTree = "<group>"; };
 		3CBBFEE684FEC435C8671B62 /* StorageRootProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageRootProvider.swift; sourceTree = "<group>"; };
-		3D569522AFD2EF3877C5A7CE /* Pods-MiniCamTests.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-MiniCamTests.debug.xcconfig"; path = "Target Support Files/Pods-MiniCamTests/Pods-MiniCamTests.debug.xcconfig"; sourceTree = "<group>"; };
 		3E671969669AEB1CC389F94E /* YOLOXObjectDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = YOLOXObjectDetector.swift; sourceTree = "<group>"; };
 		427678D9DC5D1D60BCC348C2 /* MotionEventTracker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MotionEventTracker.swift; sourceTree = "<group>"; };
 		42AF79C5B9732AA778A9B5D4 /* AppSettingsStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettingsStoreTests.swift; sourceTree = "<group>"; };
@@ -126,7 +129,10 @@
 		4D289754C95D92BB47A85FC1 /* MotionRegionDetectorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MotionRegionDetectorTests.swift; sourceTree = "<group>"; };
 		4F6E44557CE76A3CD25A5FDD /* ISAPIModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ISAPIModels.swift; sourceTree = "<group>"; };
 		53AFAA1B2BFDE2561641430D /* ArchivePreviewControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArchivePreviewControllerTests.swift; sourceTree = "<group>"; };
+		5472B31EE59759F2D7B064AB /* Pods_MiniCam.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_MiniCam.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		58D9662AA6E389C445791AD0 /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
+		5A1E15F334AE22875E7743BC /* VideoClipSelectionResolverTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoClipSelectionResolverTests.swift; sourceTree = "<group>"; };
+		63D9C83CB623D5149AF7575C /* THIRD_PARTY_NOTICES.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = THIRD_PARTY_NOTICES.md; sourceTree = "<group>"; };
 		6B65FD058C78067EA96345D6 /* ArchiveStepResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArchiveStepResolver.swift; sourceTree = "<group>"; };
 		6D04B567339EF6310715D6B8 /* ExternalFolderBookmark.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExternalFolderBookmark.swift; sourceTree = "<group>"; };
 		6E1D68C4403E20735F544FCA /* StorageCoordinatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageCoordinatorTests.swift; sourceTree = "<group>"; };
@@ -135,50 +141,56 @@
 		72C2321E2DE3AFC28B3F7B82 /* ArchiveTimelineScaleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArchiveTimelineScaleTests.swift; sourceTree = "<group>"; };
 		75FDA0BFDE110ED34F3AF73A /* PlaybackTransitionQueueTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackTransitionQueueTests.swift; sourceTree = "<group>"; };
 		7B9459F12BEDEFDAD8D82B27 /* ArchiveFrameSampler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArchiveFrameSampler.swift; sourceTree = "<group>"; };
-		7E076511FDBDBA9A43C9584F /* Pods-MiniCam.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-MiniCam.release.xcconfig"; path = "Target Support Files/Pods-MiniCam/Pods-MiniCam.release.xcconfig"; sourceTree = "<group>"; };
 		814F30B53FDB19F99101DE04 /* MotionEventTrackerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MotionEventTrackerTests.swift; sourceTree = "<group>"; };
+		8503A26F2F8B70EA75DCA0B1 /* Pods-MiniCamTests.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-MiniCamTests.debug.xcconfig"; path = "Target Support Files/Pods-MiniCamTests/Pods-MiniCamTests.debug.xcconfig"; sourceTree = "<group>"; };
 		87C33D51DCFDDA05A1E983AC /* FrameCacheIndex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrameCacheIndex.swift; sourceTree = "<group>"; };
+		88AE28FBDA63E0184C3DFD31 /* VideoClipSelection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoClipSelection.swift; sourceTree = "<group>"; };
 		917E9DA316545F567AD8CECB /* ArchiveContinuationResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArchiveContinuationResolver.swift; sourceTree = "<group>"; };
 		925502BB35E80295E465B73E /* AppContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppContainer.swift; sourceTree = "<group>"; };
 		94B1D7A370E485A27A363461 /* PlaybackTransitionQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackTransitionQueue.swift; sourceTree = "<group>"; };
 		94E61AFC9BFDE198566226F9 /* MotionEventsPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MotionEventsPanel.swift; sourceTree = "<group>"; };
+		95A7BC264534674C8A9B3E71 /* Pods-MiniCam.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-MiniCam.debug.xcconfig"; path = "Target Support Files/Pods-MiniCam/Pods-MiniCam.debug.xcconfig"; sourceTree = "<group>"; };
 		95ACA3BD25379CE1DAC5F53C /* ArchiveCalendarPopover.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArchiveCalendarPopover.swift; sourceTree = "<group>"; };
 		97735415C15F5797EC7C1444 /* ArchiveTimelineView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArchiveTimelineView.swift; sourceTree = "<group>"; };
 		9C6990913159329B675EE089 /* ArchiveAnalysisCursorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArchiveAnalysisCursorTests.swift; sourceTree = "<group>"; };
 		A2982B0738B17D9F0FC8EF45 /* AppSettingsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettingsStore.swift; sourceTree = "<group>"; };
+		A3F43CB2219827BF7C65FF41 /* ffmpeg */ = {isa = PBXFileReference; path = ffmpeg; sourceTree = "<group>"; };
 		A649FB40331107CC34175446 /* ArchiveStepResolverTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArchiveStepResolverTests.swift; sourceTree = "<group>"; };
+		AE8E90554C54511A7E1FC210 /* Pods-MiniCam.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-MiniCam.release.xcconfig"; path = "Target Support Files/Pods-MiniCam/Pods-MiniCam.release.xcconfig"; sourceTree = "<group>"; };
 		AEF32C2AF41FF52A640DFE7A /* ProfileStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileStore.swift; sourceTree = "<group>"; };
 		BD217579D01893830F46864B /* SettingsPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsPanel.swift; sourceTree = "<group>"; };
 		C3B758F5D72FEB2799896DD6 /* CredentialStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CredentialStore.swift; sourceTree = "<group>"; };
 		C6378907285BE632082F9F02 /* MiniCamTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MiniCamTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		CDAB26A9E21909588C6CA834 /* MotionEvent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MotionEvent.swift; sourceTree = "<group>"; };
+		CDF5A4816E1775FC33A5308E /* Pods-MiniCamTests.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-MiniCamTests.release.xcconfig"; path = "Target Support Files/Pods-MiniCamTests/Pods-MiniCamTests.release.xcconfig"; sourceTree = "<group>"; };
 		CE3155E636B5E08429CD5090 /* MotionRegionDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MotionRegionDetector.swift; sourceTree = "<group>"; };
+		CEAC44597AF9FD77CE3C3D4A /* FFmpeg-LGPL-2.1.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "FFmpeg-LGPL-2.1.txt"; sourceTree = "<group>"; };
 		D1CC7EB2F634D8DD90C24A0F /* VLCVideoSurface.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VLCVideoSurface.swift; sourceTree = "<group>"; };
 		D346E37721D58638331FDE47 /* MiniCam.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MiniCam.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		DD30386D94B05A25802710C1 /* Pods-MiniCamTests.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-MiniCamTests.release.xcconfig"; path = "Target Support Files/Pods-MiniCamTests/Pods-MiniCamTests.release.xcconfig"; sourceTree = "<group>"; };
+		D96852AF55840EE3ACB2087F /* Pods_MiniCamTests.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_MiniCamTests.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		E17B1879D849CF3DF968448C /* PlaybackState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackState.swift; sourceTree = "<group>"; };
 		E771FACE72CD500C2DA5BFC7 /* ArchiveCalendarAvailability.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArchiveCalendarAvailability.swift; sourceTree = "<group>"; };
 		E868E0CAC5E6561022884506 /* FrameCacheRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrameCacheRecorder.swift; sourceTree = "<group>"; };
-		E9CC6CBDBE94F8BFA57B9BD2 /* Pods_MiniCamTests.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_MiniCamTests.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		EC1EF0E8DF861F3FA84851F4 /* HikvisionPlaybackURLTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HikvisionPlaybackURLTests.swift; sourceTree = "<group>"; };
 		EEC72F6D567EC684A1D8034F /* CameraProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraProfile.swift; sourceTree = "<group>"; };
+		F9E37D800E75DF5B4E58EAE4 /* VideoClipExporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoClipExporter.swift; sourceTree = "<group>"; };
 		FC40779C9F5296320B8E97E0 /* ArchiveCalendarAvailabilityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArchiveCalendarAvailabilityTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
-		568E47EB941D885FC51BBB70 /* Frameworks */ = {
+		507624A460195E186256AFCB /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				D6BF36EB53013C8D5A5230C5 /* Pods_MiniCam.framework in Frameworks */,
+				75AF4BC10DC6EB3A654B60ED /* Pods_MiniCam.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		90F1BB65FE24968B4B3814A0 /* Frameworks */ = {
+		6EE7D5B5B9B3435BCACBECBE /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				EAAEBCACC45F51A4E2CDA31A /* Pods_MiniCamTests.framework in Frameworks */,
+				84CC4E3A7CD8B2C3E415CE34 /* Pods_MiniCamTests.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -229,6 +241,7 @@
 		3C75465E4FF9A9D461EA47DA /* Resources */ = {
 			isa = PBXGroup;
 			children = (
+				A3F43CB2219827BF7C65FF41 /* ffmpeg */,
 				0B551B543D3C6325D9BD26A8 /* Info.plist */,
 				1427F2F2BCAE59335110F520 /* YOLOXTiny.mlpackage */,
 			);
@@ -282,6 +295,7 @@
 				477753FCA6AD7E50ABF750A9 /* ObjectDetection.swift */,
 				E17B1879D849CF3DF968448C /* PlaybackState.swift */,
 				1E13A783C640D2197163E0F3 /* RecordingSegment.swift */,
+				88AE28FBDA63E0184C3DFD31 /* VideoClipSelection.swift */,
 			);
 			path = Domain;
 			sourceTree = "<group>";
@@ -299,33 +313,12 @@
 			path = Player;
 			sourceTree = "<group>";
 		};
-		831801A24B4AB244380BB755 /* Pods */ = {
-			isa = PBXGroup;
-			children = (
-				2283B7F4F2A2DA7F2F029840 /* Pods-MiniCam.debug.xcconfig */,
-				7E076511FDBDBA9A43C9584F /* Pods-MiniCam.release.xcconfig */,
-				3D569522AFD2EF3877C5A7CE /* Pods-MiniCamTests.debug.xcconfig */,
-				DD30386D94B05A25802710C1 /* Pods-MiniCamTests.release.xcconfig */,
-			);
-			name = Pods;
-			path = Pods;
-			sourceTree = "<group>";
-		};
 		922F4E644E6AF872481B62C9 /* Settings */ = {
 			isa = PBXGroup;
 			children = (
 				BD217579D01893830F46864B /* SettingsPanel.swift */,
 			);
 			path = Settings;
-			sourceTree = "<group>";
-		};
-		9D051C6ACAFB84E050A18DCF /* Frameworks */ = {
-			isa = PBXGroup;
-			children = (
-				1F8FFA927F3161C92BC90DD7 /* Pods_MiniCam.framework */,
-				E9CC6CBDBE94F8BFA57B9BD2 /* Pods_MiniCamTests.framework */,
-			);
-			name = Frameworks;
 			sourceTree = "<group>";
 		};
 		9FA644A30B6FA961A97499FD /* Hikvision */ = {
@@ -359,6 +352,15 @@
 			path = Settings;
 			sourceTree = "<group>";
 		};
+		D3C10FB923AD7D9597F0A8B2 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				5472B31EE59759F2D7B064AB /* Pods_MiniCam.framework */,
+				D96852AF55840EE3ACB2087F /* Pods_MiniCamTests.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 		DA0445F53F50B30000EC38E2 /* Detection */ = {
 			isa = PBXGroup;
 			children = (
@@ -376,6 +378,7 @@
 				E868E0CAC5E6561022884506 /* FrameCacheRecorder.swift */,
 				47A759229FDCEFF65248F8C5 /* FrameCacheStore.swift */,
 				94B1D7A370E485A27A363461 /* PlaybackTransitionQueue.swift */,
+				F9E37D800E75DF5B4E58EAE4 /* VideoClipExporter.swift */,
 				18702BE07F5EB5C67933AB82 /* VLCPlaybackController.swift */,
 			);
 			path = Playback;
@@ -384,11 +387,13 @@
 		E563B56EF4CFBD3DD03AC67E = {
 			isa = PBXGroup;
 			children = (
+				63D9C83CB623D5149AF7575C /* THIRD_PARTY_NOTICES.md */,
 				0C3E5A58B9A7D05BA70EF98F /* MiniCam */,
 				F1946DBCB4761D6E53B05E56 /* MiniCamTests */,
+				F5F2635C40FF249705A9F906 /* ThirdPartyLicenses */,
 				14E4B6EFC943F4DF15F6B669 /* Products */,
-				831801A24B4AB244380BB755 /* Pods */,
-				9D051C6ACAFB84E050A18DCF /* Frameworks */,
+				FCA8AB1015256BA3B60C3AE7 /* Pods */,
+				D3C10FB923AD7D9597F0A8B2 /* Frameworks */,
 			);
 			sourceTree = "<group>";
 		};
@@ -431,8 +436,29 @@
 				4D289754C95D92BB47A85FC1 /* MotionRegionDetectorTests.swift */,
 				75FDA0BFDE110ED34F3AF73A /* PlaybackTransitionQueueTests.swift */,
 				6E1D68C4403E20735F544FCA /* StorageCoordinatorTests.swift */,
+				5A1E15F334AE22875E7743BC /* VideoClipSelectionResolverTests.swift */,
 			);
 			path = MiniCamTests;
+			sourceTree = "<group>";
+		};
+		F5F2635C40FF249705A9F906 /* ThirdPartyLicenses */ = {
+			isa = PBXGroup;
+			children = (
+				CEAC44597AF9FD77CE3C3D4A /* FFmpeg-LGPL-2.1.txt */,
+			);
+			path = ThirdPartyLicenses;
+			sourceTree = "<group>";
+		};
+		FCA8AB1015256BA3B60C3AE7 /* Pods */ = {
+			isa = PBXGroup;
+			children = (
+				95A7BC264534674C8A9B3E71 /* Pods-MiniCam.debug.xcconfig */,
+				AE8E90554C54511A7E1FC210 /* Pods-MiniCam.release.xcconfig */,
+				8503A26F2F8B70EA75DCA0B1 /* Pods-MiniCamTests.debug.xcconfig */,
+				CDF5A4816E1775FC33A5308E /* Pods-MiniCamTests.release.xcconfig */,
+			);
+			name = Pods;
+			path = Pods;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -442,10 +468,11 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 3598ED12B42828CA08FDC6E3 /* Build configuration list for PBXNativeTarget "MiniCam" */;
 			buildPhases = (
-				9254BEBC2DC3FA1BF59794A7 /* [CP] Check Pods Manifest.lock */,
+				3BA0408F5133E01D798ED6A4 /* [CP] Check Pods Manifest.lock */,
 				34C2F7DC59361E74CC92AECB /* Sources */,
-				568E47EB941D885FC51BBB70 /* Frameworks */,
-				42773F78679A1907F3CBEF64 /* [CP] Embed Pods Frameworks */,
+				5D647CBC891C929121E185B5 /* Resources */,
+				507624A460195E186256AFCB /* Frameworks */,
+				7C5B7AA327A13B04713F8363 /* [CP] Embed Pods Frameworks */,
 			);
 			buildRules = (
 			);
@@ -460,10 +487,10 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = EB7FB887822E1194AC160DA7 /* Build configuration list for PBXNativeTarget "MiniCamTests" */;
 			buildPhases = (
-				3194BC2D96C77C25D60BC2E0 /* [CP] Check Pods Manifest.lock */,
+				78C25F89FC0A3B11C540E99F /* [CP] Check Pods Manifest.lock */,
 				C470847915A702095BB8EF82 /* Sources */,
-				90F1BB65FE24968B4B3814A0 /* Frameworks */,
-				8C3BB9D829833A608D5AEC24 /* [CP] Embed Pods Frameworks */,
+				6EE7D5B5B9B3435BCACBECBE /* Frameworks */,
+				E8AFC677462BE3F1ABAABD1A /* [CP] Embed Pods Frameworks */,
 			);
 			buildRules = (
 			);
@@ -505,8 +532,43 @@
 		};
 /* End PBXProject section */
 
+/* Begin PBXResourcesBuildPhase section */
+		5D647CBC891C929121E185B5 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				E2050085EBD884FFAB650DC0 /* FFmpeg-LGPL-2.1.txt in Resources */,
+				7B1A08681B5656F36A0F946D /* THIRD_PARTY_NOTICES.md in Resources */,
+				C6C8897142D263E2D0506E7F /* ffmpeg in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
 /* Begin PBXShellScriptBuildPhase section */
-		3194BC2D96C77C25D60BC2E0 /* [CP] Check Pods Manifest.lock */ = {
+		3BA0408F5133E01D798ED6A4 /* [CP] Check Pods Manifest.lock */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"${PODS_PODFILE_DIR_PATH}/Podfile.lock",
+				"${PODS_ROOT}/Manifest.lock",
+			);
+			name = "[CP] Check Pods Manifest.lock";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(DERIVED_FILE_DIR)/Pods-MiniCam-checkManifestLockResult.txt",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
+			showEnvVarsInLog = 0;
+		};
+		78C25F89FC0A3B11C540E99F /* [CP] Check Pods Manifest.lock */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -528,7 +590,7 @@
 			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
 			showEnvVarsInLog = 0;
 		};
-		42773F78679A1907F3CBEF64 /* [CP] Embed Pods Frameworks */ = {
+		7C5B7AA327A13B04713F8363 /* [CP] Embed Pods Frameworks */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -545,7 +607,7 @@
 			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-MiniCam/Pods-MiniCam-frameworks.sh\"\n";
 			showEnvVarsInLog = 0;
 		};
-		8C3BB9D829833A608D5AEC24 /* [CP] Embed Pods Frameworks */ = {
+		E8AFC677462BE3F1ABAABD1A /* [CP] Embed Pods Frameworks */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -560,28 +622,6 @@
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-MiniCamTests/Pods-MiniCamTests-frameworks.sh\"\n";
-			showEnvVarsInLog = 0;
-		};
-		9254BEBC2DC3FA1BF59794A7 /* [CP] Check Pods Manifest.lock */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-			);
-			inputPaths = (
-				"${PODS_PODFILE_DIR_PATH}/Podfile.lock",
-				"${PODS_ROOT}/Manifest.lock",
-			);
-			name = "[CP] Check Pods Manifest.lock";
-			outputFileListPaths = (
-			);
-			outputPaths = (
-				"$(DERIVED_FILE_DIR)/Pods-MiniCam-checkManifestLockResult.txt",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
 			showEnvVarsInLog = 0;
 		};
 /* End PBXShellScriptBuildPhase section */
@@ -640,6 +680,8 @@
 				DC2847BB6AC4BA1FC7C53FCF /* StorageRootProvider.swift in Sources */,
 				AB8448B1F490E92F4776FCF8 /* VLCPlaybackController.swift in Sources */,
 				40A9D64B933F106BFE2C9CE2 /* VLCVideoSurface.swift in Sources */,
+				056CDAEF39656066F8A7B39D /* VideoClipExporter.swift in Sources */,
+				E17A6851817E82F8557B110B /* VideoClipSelection.swift in Sources */,
 				02C94F9B1C7537145BB84FEB /* YOLOXObjectDetector.swift in Sources */,
 				4D1FE4A7B4F6F36191A810E2 /* YOLOXTiny.mlpackage in Sources */,
 			);
@@ -664,6 +706,7 @@
 				B068347AA63D421FFF92BEFD /* MotionRegionDetectorTests.swift in Sources */,
 				E0B61BE2CCF0D74A5B26C710 /* PlaybackTransitionQueueTests.swift in Sources */,
 				30EDAE5B1F6D32A3376C510D /* StorageCoordinatorTests.swift in Sources */,
+				4323225D52C89F51D66AB67A /* VideoClipSelectionResolverTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -680,7 +723,7 @@
 /* Begin XCBuildConfiguration section */
 		5EF9A11F8BEE0EF458D5BD19 /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 7E076511FDBDBA9A43C9584F /* Pods-MiniCam.release.xcconfig */;
+			baseConfigurationReference = AE8E90554C54511A7E1FC210 /* Pods-MiniCam.release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				COMBINE_HIDPI_IMAGES = YES;
@@ -697,7 +740,7 @@
 		};
 		5FF1DDFBA930699ECF37D0C1 /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 3D569522AFD2EF3877C5A7CE /* Pods-MiniCamTests.debug.xcconfig */;
+			baseConfigurationReference = 8503A26F2F8B70EA75DCA0B1 /* Pods-MiniCamTests.debug.xcconfig */;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				COMBINE_HIDPI_IMAGES = YES;
@@ -714,7 +757,7 @@
 		};
 		8BCA91DE3C67227246D61641 /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = DD30386D94B05A25802710C1 /* Pods-MiniCamTests.release.xcconfig */;
+			baseConfigurationReference = CDF5A4816E1775FC33A5308E /* Pods-MiniCamTests.release.xcconfig */;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				COMBINE_HIDPI_IMAGES = YES;
@@ -800,7 +843,7 @@
 		};
 		E7A989A9A24F8AA6C674ED08 /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 2283B7F4F2A2DA7F2F029840 /* Pods-MiniCam.debug.xcconfig */;
+			baseConfigurationReference = 95A7BC264534674C8A9B3E71 /* Pods-MiniCam.debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				COMBINE_HIDPI_IMAGES = YES;
