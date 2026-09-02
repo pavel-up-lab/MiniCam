@@ -8,6 +8,7 @@ final class ArchivePreviewController: ObservableObject {
     @Published private(set) var isVisible = false
     @Published private(set) var isUnavailable = false
     @Published private(set) var availableFrom: Date?
+    @Published private(set) var requestedDate: Date?
 
     private let store: FrameCacheStore
     private let memoryCache = NSCache<NSString, NSImage>()
@@ -21,6 +22,7 @@ final class ArchivePreviewController: ObservableObject {
 
     func request(at date: Date) {
         requestID += 1
+        requestedDate = date
         let currentRequestID = requestID
         loadTask?.cancel()
 
@@ -71,6 +73,7 @@ final class ArchivePreviewController: ObservableObject {
         loadTask = nil
         isVisible = false
         isUnavailable = false
+        requestedDate = nil
     }
 
     private func publish(image: NSImage, date: Date, requestID: Int) {

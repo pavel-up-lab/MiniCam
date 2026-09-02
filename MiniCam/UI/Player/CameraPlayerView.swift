@@ -201,29 +201,36 @@ struct CameraPlayerView: View {
             .allowsHitTesting(false)
             .transition(.opacity)
         } else if preview.isUnavailable {
-            VStack(spacing: 4) {
-                Text("ПРЕДПРОСМОТР ЕЩЁ НЕ НАКОПЛЕН")
-                    .font(.system(size: 11, weight: .bold, design: .monospaced))
-                if let availableFrom = preview.availableFrom {
-                    Text("Кадры доступны с \(formatted(availableFrom))")
+            ZStack {
+                Color.black
+                    .ignoresSafeArea()
+
+                VStack(spacing: 8) {
+                    if let date = preview.requestedDate {
+                        Text(date.formatted(date: .abbreviated, time: .standard))
+                            .font(.system(size: 15, weight: .bold, design: .monospaced))
+                    }
+
+                    Text("КАДР ЕЩЁ НЕ НАКОПЛЕН")
+                        .font(.system(size: 12, weight: .bold, design: .monospaced))
+
+                    Text("Отпустите таймлайн для перехода")
                         .font(.system(size: 10, weight: .medium, design: .monospaced))
-                } else {
-                    Text("Кэш начнёт заполняться через несколько секунд")
-                        .font(.system(size: 10, weight: .medium, design: .monospaced))
+                        .foregroundStyle(.white.opacity(0.72))
                 }
+                .multilineTextAlignment(.center)
+                .padding(20)
             }
             .foregroundStyle(.white)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 9)
-            .background(.black.opacity(0.72), in: RoundedRectangle(cornerRadius: 8))
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+            .ignoresSafeArea()
             .allowsHitTesting(false)
+            .transition(.opacity)
         }
     }
 
     private func beginPreviewTransitionIfNeeded() {
         transitionTimeoutTask?.cancel()
-        guard preview.isVisible else {
+        guard preview.isVisible || preview.isUnavailable else {
             expectedTransitionID = nil
             isWaitingForPlaybackStart = false
             preview.cancelAndHide()
