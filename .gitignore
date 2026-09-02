@@ -1,6 +1,7 @@
 .DS_Store
 .superpowers/
 build/
+build-debug/
 build-release/
 DerivedData/
 Pods/

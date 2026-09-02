@@ -22,7 +22,16 @@ final class VLCPlaybackController: NSObject, ObservableObject {
     private var activePlaybackStart: Date?
     private var isAwaitingFirstFrame = false
     private var hasActiveTransitionEnteredPlaying = false
+    private var hasLoadedMedia = false
+    private var transitionQueue = PlaybackTransitionQueue<PlaybackRequest>()
+    private var stopFallbackTask: Task<Void, Never>?
     private var pendingScreenshot: PendingScreenshot?
+
+    private struct PlaybackRequest {
+        let url: URL
+        let lowLatency: Bool
+        let transitionID: Int
+    }
 
     private struct PendingScreenshot {
         let fileURL: URL
@@ -85,6 +94,9 @@ final class VLCPlaybackController: NSObject, ObservableObject {
 
     func stop() {
         isPaused = false
+        transitionQueue.reset()
+        stopFallbackTask?.cancel()
+        stopFallbackTask = nil
         player.stop()
     }
 
@@ -151,11 +163,31 @@ final class VLCPlaybackController: NSObject, ObservableObject {
     private func play(url: URL, lowLatency: Bool) -> Int {
         transitionID += 1
         let startedTransitionID = transitionID
-        player.stop()
         isAwaitingFirstFrame = true
         hasActiveTransitionEnteredPlaying = false
-        let media = VLCMedia(url: url)
-        media.addOption(lowLatency ? ":network-caching=500" : ":network-caching=750")
+        let request = PlaybackRequest(
+            url: url,
+            lowLatency: lowLatency,
+            transitionID: startedTransitionID
+        )
+
+        switch transitionQueue.schedule(request, playerNeedsStop: hasLoadedMedia) {
+        case .startNow:
+            start(request)
+        case .stopPlayer:
+            player.stop()
+            scheduleStopFallback()
+        case .wait:
+            break
+        }
+        return startedTransitionID
+    }
+
+    private func start(_ request: PlaybackRequest) {
+        guard request.transitionID == transitionID else { return }
+        hasLoadedMedia = true
+        let media = VLCMedia(url: request.url)
+        media.addOption(request.lowLatency ? ":network-caching=500" : ":network-caching=750")
 
         if let credentials {
             media.addOption(":rtsp-user=\(credentials.username)")
@@ -164,7 +196,26 @@ final class VLCPlaybackController: NSObject, ObservableObject {
 
         player.media = media
         player.play()
-        return startedTransitionID
+    }
+
+    private func scheduleStopFallback() {
+        stopFallbackTask?.cancel()
+        stopFallbackTask = Task { [weak self] in
+            do {
+                try await Task.sleep(nanoseconds: 750_000_000)
+            } catch {
+                return
+            }
+            self?.finishStopping()
+        }
+    }
+
+    private func finishStopping() {
+        stopFallbackTask?.cancel()
+        stopFallbackTask = nil
+        hasLoadedMedia = false
+        guard let request = transitionQueue.finishStopping() else { return }
+        start(request)
     }
 
     private func uniqueScreenshotURL(in directory: URL) -> URL {
@@ -213,6 +264,8 @@ extension VLCPlaybackController: VLCMediaPlayerDelegate {
             guard let self else { return }
 
             switch self.player.state {
+            case .stopped:
+                self.finishStopping()
             case .playing:
                 self.hasActiveTransitionEnteredPlaying = true
                 if let segment = self.activeSegment {
@@ -221,10 +274,12 @@ extension VLCPlaybackController: VLCMediaPlayerDelegate {
                     self.state = .live
                 }
             case .ended:
+                self.hasLoadedMedia = false
                 if self.activeSegment != nil {
                     self.archiveDidFinish?()
                 }
             case .error:
+                self.hasLoadedMedia = false
                 self.isPaused = false
                 self.state = .failed(.cameraUnavailable)
             default:
@@ -236,10 +291,14 @@ extension VLCPlaybackController: VLCMediaPlayerDelegate {
     nonisolated func mediaPlayerTimeChanged(_ notification: Notification) {
         Task { @MainActor [weak self] in
             guard let self else { return }
-            if
-                self.isAwaitingFirstFrame,
+            guard
                 self.hasActiveTransitionEnteredPlaying,
                 self.player.state == .playing
+            else {
+                return
+            }
+            if
+                self.isAwaitingFirstFrame
             {
                 self.isAwaitingFirstFrame = false
                 self.frameRevision += 1
