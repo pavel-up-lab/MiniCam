@@ -22,6 +22,7 @@ final class ArchiveMotionAnalyzer: ObservableObject {
     let sampler = ArchiveFrameSampler()
 
     private let detector: YOLOXObjectDetector?
+    private let motionRegionDetector = MotionRegionDetector()
     private let store: MotionEventStore
     private let frameCacheStore: FrameCacheStore
     private var tracker = MotionEventTracker()
@@ -32,6 +33,7 @@ final class ArchiveMotionAnalyzer: ObservableObject {
     private var generation = UUID()
     private var trackingEnabledAt = Date.distantPast
     private var runGate = ArchiveAnalysisRunGate()
+    private var previousAnalysisSample: ArchiveFrameSample?
 
     init(
         frameCacheStore: FrameCacheStore,
@@ -52,6 +54,7 @@ final class ArchiveMotionAnalyzer: ObservableObject {
         self.credentials = credentials
         cursor = ArchiveAnalysisCursor(startingAt: date)
         tracker = MotionEventTracker()
+        previousAnalysisSample = nil
         hasLoadedStoredEvents = false
 
         Task { [weak self, store] in
@@ -90,6 +93,7 @@ final class ArchiveMotionAnalyzer: ObservableObject {
         queue.removeAll()
         credentials = nil
         isAnalyzing = false
+        previousAnalysisSample = nil
     }
 
     func suspendSampling() {
@@ -111,6 +115,7 @@ final class ArchiveMotionAnalyzer: ObservableObject {
         guard isMotionTrackingEnabled != enabled else { return }
         isMotionTrackingEnabled = enabled
         tracker = MotionEventTracker()
+        previousAnalysisSample = nil
         if enabled {
             trackingEnabledAt = date
         }
@@ -164,8 +169,6 @@ final class ArchiveMotionAnalyzer: ObservableObject {
     }
 
     private func analyze(_ samples: [ArchiveFrameSample]) async throws {
-        var previousSample: ArchiveFrameSample?
-
         for sample in samples {
             try Task.checkCancellation()
             try? await frameCacheStore.storeJPEG(
@@ -177,18 +180,80 @@ final class ArchiveMotionAnalyzer: ObservableObject {
                 sample.capturedAt >= trackingEnabledAt,
                 let detector
             else {
-                previousSample = nil
+                previousAnalysisSample = nil
                 continue
             }
-            let detections = try await detector.detect(in: sample.image)
-            if
-                let candidate = tracker.process(detections, at: sample.capturedAt),
-                let eventFrame = previousSample
-            {
-                try await record(candidate, frame: eventFrame)
+
+            guard let previousSample = previousAnalysisSample else {
+                let detections = try await detector.detect(in: sample.image)
+                _ = tracker.process(detections, at: sample.capturedAt)
+                previousAnalysisSample = sample
+                continue
             }
-            previousSample = sample
+
+            let separation = sample.capturedAt.timeIntervalSince(previousSample.capturedAt)
+            guard separation > 0, separation <= 8 else {
+                let detections = try await detector.detect(in: sample.image)
+                _ = tracker.process(detections, at: sample.capturedAt)
+                previousAnalysisSample = sample
+                continue
+            }
+
+            let regions = motionRegionDetector.regions(
+                between: previousSample.image,
+                and: sample.image
+            )
+            guard !regions.isEmpty else {
+                tracker.processQuietInterval(at: sample.capturedAt)
+                previousAnalysisSample = sample
+                continue
+            }
+
+            var detections: [ObjectDetection] = []
+            for region in regions {
+                let regionalDetections = try await detector.detect(
+                    in: sample.image,
+                    within: region.analysisBounds
+                )
+                detections.append(
+                    contentsOf: regionalDetections.filter {
+                        region.containsMotion(overlapping: $0.bounds)
+                    }
+                )
+            }
+            if
+                let candidate = tracker.process(
+                    deduplicated(detections),
+                    at: sample.capturedAt
+                ),
+                isMotionTrackingEnabled
+            {
+                try await record(candidate, frame: previousSample)
+            }
+            previousAnalysisSample = sample
         }
+    }
+
+    private func deduplicated(_ detections: [ObjectDetection]) -> [ObjectDetection] {
+        var selected: [ObjectDetection] = []
+        for detection in detections.sorted(by: { $0.confidence > $1.confidence }) {
+            let isDuplicate = selected.contains {
+                $0.category == detection.category
+                    && intersectionOverUnion($0.bounds, detection.bounds) >= 0.45
+            }
+            if !isDuplicate {
+                selected.append(detection)
+            }
+        }
+        return selected
+    }
+
+    private func intersectionOverUnion(_ lhs: CGRect, _ rhs: CGRect) -> Double {
+        let intersection = lhs.intersection(rhs)
+        guard !intersection.isNull else { return 0 }
+        let intersectionArea = intersection.width * intersection.height
+        let unionArea = lhs.width * lhs.height + rhs.width * rhs.height - intersectionArea
+        return unionArea > 0 ? intersectionArea / unionArea : 0
     }
 
     private func record(

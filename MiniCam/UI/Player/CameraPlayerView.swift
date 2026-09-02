@@ -356,9 +356,11 @@ struct CameraPlayerView: View {
                 } label: {
                     Image(systemName: isTimelineExpanded ? "chevron.down" : "chevron.up")
                         .font(.system(size: 12, weight: .bold))
-                        .frame(width: 24, height: 24)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
                         .foregroundStyle(Color(red: 0.73, green: 0.95, blue: 0.18))
                 }
+                .padding(-10)
                 .buttonStyle(.plain)
                 .help(isTimelineExpanded ? "Свернуть таймлайн" : "Развернуть таймлайн")
                 .accessibilityLabel(isTimelineExpanded ? "Свернуть таймлайн" : "Развернуть таймлайн")

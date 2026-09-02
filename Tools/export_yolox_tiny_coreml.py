@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-"""Convert official YOLOX-Nano 0.1.1rc0 weights to Core ML for MiniCam."""
+"""Convert official YOLOX-Tiny 0.1.1rc0 weights to Core ML for MiniCam."""
 
 import argparse
 import hashlib
@@ -12,7 +12,7 @@ import torch
 
 
 EXPECTED_WEIGHTS_SHA256 = (
-    "cd28f55fbbc1829f99d9ac9b38a16d259a22889739c8728ea877610201feff7b"
+    "f99294c4cf6df2a384f956371ec31cf4d06fa3a4a859899df0e410a6045904c9"
 )
 
 
@@ -28,7 +28,7 @@ def validate_weights(weights: Path) -> None:
     digest = hashlib.sha256(weights.read_bytes()).hexdigest()
     if digest != EXPECTED_WEIGHTS_SHA256:
         raise ValueError(
-            "Expected official YOLOX-Nano 0.1.1rc0 weights with SHA-256 "
+            "Expected official YOLOX-Tiny 0.1.1rc0 weights with SHA-256 "
             f"{EXPECTED_WEIGHTS_SHA256}, received {digest}."
         )
 
@@ -37,21 +37,21 @@ def build_model(source: Path, weights: Path) -> torch.nn.Module:
     sys.path.insert(0, str(source))
     from yolox.models import YOLOPAFPN, YOLOX, YOLOXHead
 
-    width = 0.25
+    width = 0.375
     channels = [256, 512, 1024]
     backbone = YOLOPAFPN(
         depth=0.33,
         width=width,
         in_channels=channels,
         act="silu",
-        depthwise=True,
+        depthwise=False,
     )
     head = YOLOXHead(
         num_classes=80,
         width=width,
         in_channels=channels,
         act="silu",
-        depthwise=True,
+        depthwise=False,
     )
     model = YOLOX(backbone, head)
     for module in model.modules():
@@ -90,7 +90,7 @@ def convert(model: torch.nn.Module) -> ct.models.MLModel:
     )
     converted.author = "Megvii YOLOX, converted for MiniCam"
     converted.license = "Apache License 2.0"
-    converted.short_description = "YOLOX-Nano COCO object detector"
+    converted.short_description = "YOLOX-Tiny COCO object detector"
     return converted
 
 

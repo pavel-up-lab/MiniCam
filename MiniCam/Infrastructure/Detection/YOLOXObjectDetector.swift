@@ -24,7 +24,7 @@ actor YOLOXObjectDetector {
         (7, .truck)
     ]
 
-    private let model: YOLOXNano
+    private let model: YOLOXTiny
     private let minimumConfidence: Double
     private let suppressionThreshold: Double
 
@@ -34,7 +34,7 @@ actor YOLOXObjectDetector {
     ) throws {
         let configuration = MLModelConfiguration()
         configuration.computeUnits = .all
-        model = try YOLOXNano(configuration: configuration)
+        model = try YOLOXTiny(configuration: configuration)
         self.minimumConfidence = minimumConfidence
         self.suppressionThreshold = suppressionThreshold
     }
@@ -42,7 +42,7 @@ actor YOLOXObjectDetector {
     func detect(in image: CGImage) throws -> [ObjectDetection] {
         let prepared = try prepare(image)
         let output = try model.prediction(
-            input: YOLOXNanoInput(image: prepared.pixelBuffer)
+            input: YOLOXTinyInput(image: prepared.pixelBuffer)
         )
         let candidates = decode(
             output.predictions,
@@ -50,6 +50,23 @@ actor YOLOXObjectDetector {
             visibleHeight: prepared.visibleHeight
         )
         return nonMaximumSuppression(candidates).map(\.detection)
+    }
+
+    func detect(in image: CGImage, within normalizedBounds: CGRect) throws -> [ObjectDetection] {
+        let bounds = normalizedBounds.intersection(
+            CGRect(x: 0, y: 0, width: 1, height: 1)
+        )
+        guard !bounds.isNull, bounds.width > 0, bounds.height > 0 else { return [] }
+
+        let pixelBounds = CGRect(
+            x: bounds.minX * CGFloat(image.width),
+            y: bounds.minY * CGFloat(image.height),
+            width: bounds.width * CGFloat(image.width),
+            height: bounds.height * CGFloat(image.height)
+        ).integral
+        guard let cropped = image.cropping(to: pixelBounds) else { return [] }
+
+        return try detect(in: cropped).map { $0.remapped(from: bounds) }
     }
 
     private func prepare(_ image: CGImage) throws -> PreparedImage {
@@ -108,12 +125,15 @@ actor YOLOXObjectDetector {
             alpha: 1
         )
         context.fill(CGRect(x: 0, y: 0, width: Self.inputSize, height: Self.inputSize))
-        context.translateBy(x: 0, y: CGFloat(Self.inputSize))
-        context.scaleBy(x: 1, y: -1)
         context.interpolationQuality = .high
         context.draw(
             image,
-            in: CGRect(x: 0, y: 0, width: visibleWidth, height: visibleHeight)
+            in: CGRect(
+                x: 0,
+                y: Double(Self.inputSize) - visibleHeight,
+                width: visibleWidth,
+                height: visibleHeight
+            )
         )
 
         return PreparedImage(

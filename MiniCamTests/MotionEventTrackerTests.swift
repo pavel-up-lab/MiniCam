@@ -69,6 +69,25 @@ final class MotionEventTrackerTests: XCTestCase {
         )
     }
 
+    func testQuietSceneConfirmsStopWithoutRunningObjectDetection() {
+        var tracker = MotionEventTracker()
+        _ = tracker.process([detection(x: 0.10)], at: date(0))
+        let firstStart = tracker.process([detection(x: 0.13)], at: date(1))
+        tracker.processQuietInterval(at: date(2))
+        tracker.processQuietInterval(at: date(3))
+
+        let secondStart = tracker.process([detection(x: 0.16)], at: date(4))
+
+        XCTAssertEqual(
+            firstStart,
+            MotionEventCandidate(startedAt: date(0), categories: [.person])
+        )
+        XCTAssertEqual(
+            secondStart,
+            MotionEventCandidate(startedAt: date(3), categories: [.person])
+        )
+    }
+
     func testTracksObjectsIndependentlyAndForgetsThemAfterThirtySeconds() {
         var tracker = MotionEventTracker()
         _ = tracker.process(

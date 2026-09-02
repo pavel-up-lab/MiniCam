@@ -31,6 +31,7 @@ struct MotionEventTracker {
         let category: MotionObjectCategory
         var bounds: CGRect
         var lastSeenAt: Date
+        var lastStateObservedAt: Date
         var isMoving: Bool
         var stationaryIntervals: Int
     }
@@ -64,6 +65,7 @@ struct MotionEventTracker {
                         category: detection.category,
                         bounds: detection.bounds,
                         lastSeenAt: date,
+                        lastStateObservedAt: date,
                         isMoving: false,
                         stationaryIntervals: 0
                     )
@@ -76,7 +78,7 @@ struct MotionEventTracker {
             let moved = isMovement(from: track.bounds, to: detection.bounds)
             if moved {
                 if !track.isMoving {
-                    started.append((track.lastSeenAt, track.category))
+                    started.append((track.lastStateObservedAt, track.category))
                 }
                 track.isMoving = true
                 track.stationaryIntervals = 0
@@ -88,6 +90,7 @@ struct MotionEventTracker {
             }
             track.bounds = detection.bounds
             track.lastSeenAt = date
+            track.lastStateObservedAt = date
             tracks[trackIndex] = track
         }
 
@@ -95,6 +98,19 @@ struct MotionEventTracker {
         let startedCategories = Set(started.map(\.category))
         let categories = MotionObjectCategory.allCases.filter(startedCategories.contains)
         return MotionEventCandidate(startedAt: startedAt, categories: categories)
+    }
+
+    mutating func processQuietInterval(at date: Date) {
+        tracks.removeAll {
+            date.timeIntervalSince($0.lastSeenAt) >= configuration.absenceTimeout
+        }
+        for index in tracks.indices {
+            tracks[index].stationaryIntervals += 1
+            tracks[index].lastStateObservedAt = date
+            if tracks[index].stationaryIntervals >= configuration.stationaryIntervals {
+                tracks[index].isMoving = false
+            }
+        }
     }
 
     private func bestTrackIndex(
