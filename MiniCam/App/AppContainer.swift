@@ -79,6 +79,12 @@ final class AppContainer: ObservableObject {
         self.credentialStore = credentialStore
         profile = profileStore.load()
         motionAnalyzer.setMotionTrackingEnabled(settings.isMotionTrackingEnabled)
+        playbackController.playbackWillTransition = { [weak self] in
+            self?.motionAnalyzer.suspendSampling()
+        }
+        playbackController.playbackTransitionDidFinish = { [weak self] in
+            self?.motionAnalyzer.resumeSampling()
+        }
 
         if let bookmark = settings.screenshotFolderBookmark {
             let resolvedURL = try? ExternalFolderBookmark.resolve(bookmark)

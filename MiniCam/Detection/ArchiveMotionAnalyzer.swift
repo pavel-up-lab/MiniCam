@@ -1,5 +1,17 @@
 import Foundation
 
+struct ArchiveAnalysisRunGate {
+    private(set) var canBeginProcessing = true
+
+    mutating func suspend() {
+        canBeginProcessing = false
+    }
+
+    mutating func resume() {
+        canBeginProcessing = true
+    }
+}
+
 @MainActor
 final class ArchiveMotionAnalyzer: ObservableObject {
     @Published private(set) var events: [MotionEvent] = []
@@ -19,6 +31,7 @@ final class ArchiveMotionAnalyzer: ObservableObject {
     private var credentials: CameraCredentials?
     private var generation = UUID()
     private var trackingEnabledAt = Date.distantPast
+    private var runGate = ArchiveAnalysisRunGate()
 
     init(
         frameCacheStore: FrameCacheStore,
@@ -70,12 +83,24 @@ final class ArchiveMotionAnalyzer: ObservableObject {
     }
 
     func stop() {
+        runGate.resume()
         analysisTask?.cancel()
         analysisTask = nil
         sampler.stop()
         queue.removeAll()
         credentials = nil
         isAnalyzing = false
+    }
+
+    func suspendSampling() {
+        runGate.suspend()
+        analysisTask?.cancel()
+        sampler.stop()
+    }
+
+    func resumeSampling() {
+        runGate.resume()
+        beginProcessingIfNeeded()
     }
 
     func imageURL(for event: MotionEvent) -> URL {
@@ -92,6 +117,7 @@ final class ArchiveMotionAnalyzer: ObservableObject {
     }
 
     private func beginProcessingIfNeeded() {
+        guard runGate.canBeginProcessing else { return }
         guard analysisTask == nil else { return }
         analysisTask = Task { [weak self] in
             guard let self else { return }
@@ -99,7 +125,7 @@ final class ArchiveMotionAnalyzer: ObservableObject {
             defer {
                 self.isAnalyzing = false
                 self.analysisTask = nil
-                if !self.queue.isEmpty {
+                if self.runGate.canBeginProcessing, !self.queue.isEmpty {
                     self.beginProcessingIfNeeded()
                 }
             }

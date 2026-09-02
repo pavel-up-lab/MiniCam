@@ -14,16 +14,19 @@ final class VLCPlaybackController: NSObject, ObservableObject {
 
     let videoView = VLCVideoView(frame: .zero)
     var archiveDidFinish: (() -> Void)?
+    var playbackWillTransition: (() -> Void)?
+    var playbackTransitionDidFinish: (() -> Void)?
 
-    private let player: VLCMediaPlayer
+    private var player: VLCMediaPlayer
     private var profile: CameraProfile?
     private var credentials: CameraCredentials?
     private var activeSegment: RecordingSegment?
     private var activePlaybackStart: Date?
     private var isAwaitingFirstFrame = false
-    private var hasActiveTransitionEnteredPlaying = false
     private var hasLoadedMedia = false
+    private var startedTransitionID = 0
     private var transitionQueue = PlaybackTransitionQueue<PlaybackRequest>()
+    private var liveRequestGate = LivePlaybackRequestGate()
     private var stopFallbackTask: Task<Void, Never>?
     private var pendingScreenshot: PendingScreenshot?
 
@@ -40,23 +43,15 @@ final class VLCPlaybackController: NSObject, ObservableObject {
     }
 
     override init() {
-        player = VLCMediaPlayer(options: [
-            "--no-video-title-show",
-            "--no-snapshot-preview",
-            "--no-drop-late-frames",
-            "--no-skip-frames",
-            "--network-caching=500",
-            "--live-caching=500"
-        ])
+        player = Self.makePlayer()
         super.init()
-        videoView.fillScreen = true
-        player.drawable = videoView
-        player.delegate = self
+        attachCurrentPlayer()
     }
 
     func configure(profile: CameraProfile, credentials: CameraCredentials) {
         self.profile = profile
         self.credentials = credentials
+        liveRequestGate.reset()
     }
 
     @discardableResult
@@ -64,6 +59,9 @@ final class VLCPlaybackController: NSObject, ObservableObject {
         guard let profile, let url = profile.liveStreamURL() else {
             state = .failed(.invalidAddress)
             return nil
+        }
+        guard liveRequestGate.shouldAccept() else {
+            return transitionID > 0 ? transitionID : nil
         }
 
         activeSegment = nil
@@ -83,6 +81,8 @@ final class VLCPlaybackController: NSObject, ObservableObject {
             state = .failed(.incompatibleArchive)
             return nil
         }
+
+        liveRequestGate.reset()
 
         activeSegment = segment
         activePlaybackStart = date
@@ -161,17 +161,18 @@ final class VLCPlaybackController: NSObject, ObservableObject {
     }
 
     private func play(url: URL, lowLatency: Bool) -> Int {
+        playbackWillTransition?()
         transitionID += 1
         let startedTransitionID = transitionID
         isAwaitingFirstFrame = true
-        hasActiveTransitionEnteredPlaying = false
         let request = PlaybackRequest(
             url: url,
             lowLatency: lowLatency,
             transitionID: startedTransitionID
         )
 
-        switch transitionQueue.schedule(request, playerNeedsStop: hasLoadedMedia) {
+        let action = transitionQueue.schedule(request, playerNeedsStop: hasLoadedMedia)
+        switch action {
         case .startNow:
             start(request)
         case .stopPlayer:
@@ -185,9 +186,11 @@ final class VLCPlaybackController: NSObject, ObservableObject {
 
     private func start(_ request: PlaybackRequest) {
         guard request.transitionID == transitionID else { return }
+        startedTransitionID = request.transitionID
         hasLoadedMedia = true
         let media = VLCMedia(url: request.url)
         media.addOption(request.lowLatency ? ":network-caching=500" : ":network-caching=750")
+        media.addOption(":rtsp-frame-buffer-size=2000000")
 
         if let credentials {
             media.addOption(":rtsp-user=\(credentials.username)")
@@ -213,9 +216,37 @@ final class VLCPlaybackController: NSObject, ObservableObject {
     private func finishStopping() {
         stopFallbackTask?.cancel()
         stopFallbackTask = nil
+        guard let request = transitionQueue.finishStopping() else {
+            return
+        }
         hasLoadedMedia = false
-        guard let request = transitionQueue.finishStopping() else { return }
+        replacePlayer()
         start(request)
+    }
+
+    private static func makePlayer() -> VLCMediaPlayer {
+        VLCMediaPlayer(options: [
+            "--no-video-title-show",
+            "--no-snapshot-preview",
+            "--no-drop-late-frames",
+            "--no-skip-frames",
+            "--network-caching=500",
+            "--live-caching=500"
+        ])
+    }
+
+    private func attachCurrentPlayer() {
+        videoView.fillScreen = true
+        player.drawable = videoView
+        player.delegate = self
+    }
+
+    private func replacePlayer() {
+        let previousPlayer = player
+        previousPlayer.delegate = nil
+        previousPlayer.drawable = nil
+        player = Self.makePlayer()
+        attachCurrentPlayer()
     }
 
     private func uniqueScreenshotURL(in directory: URL) -> URL {
@@ -260,14 +291,16 @@ final class VLCPlaybackController: NSObject, ObservableObject {
 
 extension VLCPlaybackController: VLCMediaPlayerDelegate {
     nonisolated func mediaPlayerStateChanged(_ notification: Notification) {
+        guard let source = notification.object as? VLCMediaPlayer else { return }
+        let sourceID = ObjectIdentifier(source)
         Task { @MainActor [weak self] in
             guard let self else { return }
+            guard ObjectIdentifier(self.player) == sourceID else { return }
 
             switch self.player.state {
             case .stopped:
                 self.finishStopping()
             case .playing:
-                self.hasActiveTransitionEnteredPlaying = true
                 if let segment = self.activeSegment {
                     self.state = .archive(self.currentDate.clamped(to: segment.start...segment.end))
                 } else {
@@ -282,6 +315,7 @@ extension VLCPlaybackController: VLCMediaPlayerDelegate {
                 self.hasLoadedMedia = false
                 self.isPaused = false
                 self.state = .failed(.cameraUnavailable)
+                self.playbackTransitionDidFinish?()
             default:
                 break
             }
@@ -289,12 +323,12 @@ extension VLCPlaybackController: VLCMediaPlayerDelegate {
     }
 
     nonisolated func mediaPlayerTimeChanged(_ notification: Notification) {
+        guard let source = notification.object as? VLCMediaPlayer else { return }
+        let sourceID = ObjectIdentifier(source)
         Task { @MainActor [weak self] in
             guard let self else { return }
-            guard
-                self.hasActiveTransitionEnteredPlaying,
-                self.player.state == .playing
-            else {
+            guard ObjectIdentifier(self.player) == sourceID else { return }
+            guard self.startedTransitionID == self.transitionID else {
                 return
             }
             if
@@ -303,6 +337,7 @@ extension VLCPlaybackController: VLCMediaPlayerDelegate {
                 self.isAwaitingFirstFrame = false
                 self.frameRevision += 1
                 self.readyTransitionID = self.transitionID
+                self.playbackTransitionDidFinish?()
 #if DEBUG
                 print("[Playback] first frame revision=\(self.frameRevision)")
 #endif
@@ -321,8 +356,11 @@ extension VLCPlaybackController: VLCMediaPlayerDelegate {
     }
 
     nonisolated func mediaPlayerSnapshot(_ notification: Notification) {
+        guard let source = notification.object as? VLCMediaPlayer else { return }
+        let sourceID = ObjectIdentifier(source)
         Task { @MainActor [weak self] in
             guard let self, let pendingScreenshot = self.pendingScreenshot else { return }
+            guard ObjectIdentifier(self.player) == sourceID else { return }
             self.finishScreenshot(.success(pendingScreenshot.fileURL))
         }
     }

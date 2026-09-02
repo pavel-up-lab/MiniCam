@@ -2,6 +2,16 @@ import XCTest
 @testable import MiniCam
 
 final class ArchiveAnalysisCursorTests: XCTestCase {
+    func testSuspendedAnalysisRequiresExplicitResume() {
+        var gate = ArchiveAnalysisRunGate()
+
+        XCTAssertTrue(gate.canBeginProcessing)
+        gate.suspend()
+        XCTAssertFalse(gate.canBeginProcessing)
+        gate.resume()
+        XCTAssertTrue(gate.canBeginProcessing)
+    }
+
     func testGrowingRecordingProducesOnlyArchiveAddedAfterLaunch() throws {
         var cursor = ArchiveAnalysisCursor(startingAt: date(100))
         let firstSegment = try segment(id: "current", start: 0, end: 115)
