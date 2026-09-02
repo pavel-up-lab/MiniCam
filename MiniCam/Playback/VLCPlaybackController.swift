@@ -33,6 +33,7 @@ final class VLCPlaybackController: NSObject, ObservableObject {
     override init() {
         player = VLCMediaPlayer(options: [
             "--no-video-title-show",
+            "--no-snapshot-preview",
             "--no-drop-late-frames",
             "--no-skip-frames",
             "--network-caching=500",
