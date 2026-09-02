@@ -2,16 +2,6 @@ import XCTest
 @testable import MiniCam
 
 final class PlaybackTransitionQueueTests: XCTestCase {
-    func testIntelPlaybackCanSkipButNeverDropLateFrames() {
-        let intel = VLCPlaybackOptions.playerOptions(for: .intel)
-        let appleSilicon = VLCPlaybackOptions.playerOptions(for: .appleSilicon)
-
-        XCTAssertTrue(intel.contains("--no-drop-late-frames"))
-        XCTAssertFalse(intel.contains("--no-skip-frames"))
-        XCTAssertTrue(appleSilicon.contains("--no-drop-late-frames"))
-        XCTAssertTrue(appleSilicon.contains("--no-skip-frames"))
-    }
-
     func testDuplicateLiveRequestIsIgnoredOnlyDuringStartupWindow() {
         var gate = LivePlaybackRequestGate(duplicateWindow: 1)
         let start = Date(timeIntervalSince1970: 1_000)

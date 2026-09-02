@@ -28,7 +28,10 @@ final class VLCPlaybackController: NSObject, ObservableObject {
     private var transitionQueue = PlaybackTransitionQueue<PlaybackRequest>()
     private var liveRequestGate = LivePlaybackRequestGate()
     private var stopFallbackTask: Task<Void, Never>?
+    private var releaseDelayTask: Task<Void, Never>?
     private var pendingScreenshot: PendingScreenshot?
+
+    private static let cameraReleaseDelayNanoseconds: UInt64 = 400_000_000
 
     private struct PlaybackRequest {
         let url: URL
@@ -97,6 +100,8 @@ final class VLCPlaybackController: NSObject, ObservableObject {
         transitionQueue.reset()
         stopFallbackTask?.cancel()
         stopFallbackTask = nil
+        releaseDelayTask?.cancel()
+        releaseDelayTask = nil
         player.stop()
     }
 
@@ -209,6 +214,24 @@ final class VLCPlaybackController: NSObject, ObservableObject {
             } catch {
                 return
             }
+            self?.scheduleReleaseCompletion()
+        }
+    }
+
+    private func scheduleReleaseCompletion() {
+        guard transitionQueue.isWaitingForStop else { return }
+        stopFallbackTask?.cancel()
+        stopFallbackTask = nil
+        guard releaseDelayTask == nil else { return }
+
+        releaseDelayTask = Task { [weak self] in
+            do {
+                try await Task.sleep(
+                    nanoseconds: Self.cameraReleaseDelayNanoseconds
+                )
+            } catch {
+                return
+            }
             self?.finishStopping()
         }
     }
@@ -216,6 +239,8 @@ final class VLCPlaybackController: NSObject, ObservableObject {
     private func finishStopping() {
         stopFallbackTask?.cancel()
         stopFallbackTask = nil
+        releaseDelayTask?.cancel()
+        releaseDelayTask = nil
         guard let request = transitionQueue.finishStopping() else {
             return
         }
@@ -225,9 +250,14 @@ final class VLCPlaybackController: NSObject, ObservableObject {
     }
 
     private static func makePlayer() -> VLCMediaPlayer {
-        VLCMediaPlayer(options: VLCPlaybackOptions.playerOptions(
-            for: .current
-        ))
+        VLCMediaPlayer(options: [
+            "--no-video-title-show",
+            "--no-snapshot-preview",
+            "--no-drop-late-frames",
+            "--no-skip-frames",
+            "--network-caching=500",
+            "--live-caching=500"
+        ])
     }
 
     private func attachCurrentPlayer() {
@@ -294,7 +324,7 @@ extension VLCPlaybackController: VLCMediaPlayerDelegate {
 
             switch self.player.state {
             case .stopped:
-                self.finishStopping()
+                self.scheduleReleaseCompletion()
             case .playing:
                 if let segment = self.activeSegment {
                     self.state = .archive(self.currentDate.clamped(to: segment.start...segment.end))
