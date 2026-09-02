@@ -19,6 +19,9 @@ final class AppContainer: ObservableObject {
     @Published private(set) var storageStatus: StorageStatus = .internalStorage
     @Published private(set) var isApplyingSettings = false
     @Published private(set) var currentExternalFolderURL: URL?
+    @Published private(set) var screenshotFolderURL: URL
+    @Published private(set) var currentCustomScreenshotFolderURL: URL?
+    @Published private(set) var isScreenshotFolderFallback = false
 
     let playbackController = VLCPlaybackController()
     let archivePreviewController: ArchivePreviewController
@@ -34,6 +37,7 @@ final class AppContainer: ObservableObject {
     private let storageCoordinator: StorageCoordinator
     private let settingsStore: AppSettingsStore
     private let externalFolderAccess = SecurityScopedFolderAccess()
+    private let screenshotFolderAccess = SecurityScopedFolderAccess()
 
     private let profileStore: ProfileStore
     private let credentialStore: CredentialStore
@@ -48,6 +52,10 @@ final class AppContainer: ObservableObject {
         settingsStore: AppSettingsStore = AppSettingsStore()
     ) {
         let settings = settingsStore.load()
+        let desktopURL = FileManager.default.urls(
+            for: .desktopDirectory,
+            in: .userDomainMask
+        ).first ?? FileManager.default.homeDirectoryForCurrentUser
         let internalRoot = StorageCoordinator.defaultInternalRoot
         let roots = StorageRootProvider(initialRoot: internalRoot)
         let storageCoordinator = StorageCoordinator(
@@ -60,6 +68,7 @@ final class AppContainer: ObservableObject {
         self.storageCoordinator = storageCoordinator
         self.settingsStore = settingsStore
         appSettings = settings
+        screenshotFolderURL = desktopURL
         archivePreviewController = ArchivePreviewController(store: frameCacheStore)
         frameCacheRecorder = FrameCacheRecorder(store: frameCacheStore)
         motionAnalyzer = ArchiveMotionAnalyzer(
@@ -70,6 +79,23 @@ final class AppContainer: ObservableObject {
         self.credentialStore = credentialStore
         profile = profileStore.load()
         motionAnalyzer.setMotionTrackingEnabled(settings.isMotionTrackingEnabled)
+
+        if let bookmark = settings.screenshotFolderBookmark {
+            let resolvedURL = try? ExternalFolderBookmark.resolve(bookmark)
+            currentCustomScreenshotFolderURL = resolvedURL
+                ?? settings.screenshotFolderDisplayPath.map { URL(fileURLWithPath: $0) }
+            if let resolvedURL {
+                screenshotFolderAccess.replace(with: resolvedURL)
+                if Self.isWritableDirectory(resolvedURL) {
+                    screenshotFolderURL = resolvedURL
+                } else {
+                    screenshotFolderAccess.replace(with: nil)
+                    isScreenshotFolderFallback = true
+                }
+            } else {
+                isScreenshotFolderFallback = true
+            }
+        }
 
         var folderToRestore: URL?
         if let bookmark = settings.externalStorageBookmark {
@@ -96,13 +122,18 @@ final class AppContainer: ObservableObject {
 
     func applySettings(
         motionTrackingEnabled: Bool,
-        externalFolderURL: URL?
+        externalFolderURL: URL?,
+        screenshotFolderURL: URL?
     ) async throws {
         isApplyingSettings = true
         defer { isApplyingSettings = false }
 
         let previousExternalFolderURL = currentExternalFolderURL
-        let newSettings: AppSettings
+        let screenshotSettings = try prepareScreenshotFolder(screenshotFolderURL)
+        let storageSettings: (
+            bookmark: Data?,
+            displayPath: String?
+        )
         if let externalFolderURL {
             let bookmark = try ExternalFolderBookmark.make(for: externalFolderURL)
             externalFolderAccess.replace(with: externalFolderURL)
@@ -114,11 +145,7 @@ final class AppContainer: ObservableObject {
             }
             storageStatus = status
             currentExternalFolderURL = externalFolderURL
-            newSettings = AppSettings(
-                isMotionTrackingEnabled: motionTrackingEnabled,
-                externalStorageBookmark: bookmark,
-                externalStorageDisplayPath: externalFolderURL.path
-            )
+            storageSettings = (bookmark, externalFolderURL.path)
         } else {
             let status = await storageCoordinator.configureInternalStorage()
             guard case .internalStorage = status else {
@@ -128,16 +155,95 @@ final class AppContainer: ObservableObject {
             storageStatus = status
             currentExternalFolderURL = nil
             externalFolderAccess.replace(with: nil)
-            newSettings = AppSettings(
-                isMotionTrackingEnabled: motionTrackingEnabled,
-                externalStorageBookmark: nil,
-                externalStorageDisplayPath: nil
-            )
+            storageSettings = (nil, nil)
         }
+
+        applyScreenshotFolder(screenshotFolderURL)
+        let newSettings = AppSettings(
+            isMotionTrackingEnabled: motionTrackingEnabled,
+            externalStorageBookmark: storageSettings.bookmark,
+            externalStorageDisplayPath: storageSettings.displayPath,
+            screenshotFolderBookmark: screenshotSettings.bookmark,
+            screenshotFolderDisplayPath: screenshotSettings.displayPath
+        )
 
         try settingsStore.save(newSettings)
         appSettings = newSettings
         motionAnalyzer.setMotionTrackingEnabled(motionTrackingEnabled)
+    }
+
+    func takeScreenshot() async throws -> URL {
+        if let customFolder = currentCustomScreenshotFolderURL {
+            if Self.isWritableDirectory(customFolder) {
+                screenshotFolderURL = customFolder
+                isScreenshotFolderFallback = false
+            } else {
+                screenshotFolderURL = Self.defaultScreenshotFolder
+                isScreenshotFolderFallback = true
+            }
+        }
+        return try await playbackController.saveCurrentFrame(to: screenshotFolderURL)
+    }
+
+    private func prepareScreenshotFolder(
+        _ folderURL: URL?
+    ) throws -> (bookmark: Data?, displayPath: String?) {
+        guard let folderURL else {
+            return (nil, nil)
+        }
+
+        let didStartTemporaryAccess = folderURL.startAccessingSecurityScopedResource()
+        defer {
+            if didStartTemporaryAccess {
+                folderURL.stopAccessingSecurityScopedResource()
+            }
+        }
+        guard Self.isWritableDirectory(folderURL) else {
+            throw SettingsApplyError.screenshotFolderUnavailable
+        }
+        let bookmark = try ExternalFolderBookmark.make(for: folderURL)
+        return (bookmark, folderURL.path)
+    }
+
+    private func applyScreenshotFolder(_ folderURL: URL?) {
+        guard let folderURL else {
+            screenshotFolderAccess.replace(with: nil)
+            currentCustomScreenshotFolderURL = nil
+            screenshotFolderURL = Self.defaultScreenshotFolder
+            isScreenshotFolderFallback = false
+            return
+        }
+
+        screenshotFolderAccess.replace(with: folderURL)
+        currentCustomScreenshotFolderURL = folderURL
+        screenshotFolderURL = folderURL
+        isScreenshotFolderFallback = false
+    }
+
+    private static var defaultScreenshotFolder: URL {
+        FileManager.default.urls(
+            for: .desktopDirectory,
+            in: .userDomainMask
+        ).first ?? FileManager.default.homeDirectoryForCurrentUser
+    }
+
+    private static func isWritableDirectory(_ url: URL) -> Bool {
+        var isDirectory: ObjCBool = false
+        guard
+            FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory),
+            isDirectory.boolValue
+        else {
+            return false
+        }
+        let probe = url.appendingPathComponent(".minicam-screenshot-write-test")
+        do {
+            try Data([0]).write(to: probe, options: .atomic)
+            try FileManager.default.removeItem(at: probe)
+            return true
+        } catch {
+            try? FileManager.default.removeItem(at: probe)
+            return false
+        }
     }
 
     private func restoreStorageSelection(_ externalFolderURL: URL?) async -> StorageStatus {
@@ -429,6 +535,7 @@ final class AppContainer: ObservableObject {
 enum SettingsApplyError: LocalizedError {
     case externalFolderUnavailable
     case storageMigrationFailed
+    case screenshotFolderUnavailable
 
     var errorDescription: String? {
         switch self {
@@ -436,6 +543,8 @@ enum SettingsApplyError: LocalizedError {
             return "Не удалось записать данные в выбранную папку. Настройки не сохранены."
         case .storageMigrationFailed:
             return "Не удалось безопасно перенести все данные. Настройки не изменены."
+        case .screenshotFolderUnavailable:
+            return "Не удалось записать скриншот в выбранную папку."
         }
     }
 }

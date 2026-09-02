@@ -10,6 +10,7 @@ final class VLCPlaybackController: NSObject, ObservableObject {
     @Published private(set) var frameRevision = 0
     @Published private(set) var transitionID = 0
     @Published private(set) var readyTransitionID = 0
+    @Published private(set) var isSavingScreenshot = false
 
     let videoView = VLCVideoView(frame: .zero)
     var archiveDidFinish: (() -> Void)?
@@ -21,6 +22,13 @@ final class VLCPlaybackController: NSObject, ObservableObject {
     private var activePlaybackStart: Date?
     private var isAwaitingFirstFrame = false
     private var hasActiveTransitionEnteredPlaying = false
+    private var pendingScreenshot: PendingScreenshot?
+
+    private struct PendingScreenshot {
+        let fileURL: URL
+        let continuation: CheckedContinuation<URL, Error>
+        let timeoutTask: Task<Void, Never>
+    }
 
     override init() {
         player = VLCMediaPlayer(options: [
@@ -96,6 +104,49 @@ final class VLCPlaybackController: NSObject, ObservableObject {
         player.play()
     }
 
+    func saveCurrentFrame(to directory: URL) async throws -> URL {
+        guard pendingScreenshot == nil else {
+            throw ScreenshotError.alreadySaving
+        }
+        guard player.hasVideoOut else {
+            throw ScreenshotError.frameUnavailable
+        }
+        switch state {
+        case .live, .archive:
+            break
+        case .loading, .failed:
+            throw ScreenshotError.frameUnavailable
+        }
+
+        try FileManager.default.createDirectory(
+            at: directory,
+            withIntermediateDirectories: true
+        )
+        let fileURL = uniqueScreenshotURL(in: directory)
+        isSavingScreenshot = true
+
+        return try await withCheckedThrowingContinuation { continuation in
+            let timeoutTask = Task { [weak self] in
+                do {
+                    try await Task.sleep(nanoseconds: 5_000_000_000)
+                } catch {
+                    return
+                }
+                self?.finishScreenshot(.failure(ScreenshotError.timedOut))
+            }
+            pendingScreenshot = PendingScreenshot(
+                fileURL: fileURL,
+                continuation: continuation,
+                timeoutTask: timeoutTask
+            )
+            player.saveVideoSnapshot(
+                at: fileURL.path,
+                withWidth: 0,
+                andHeight: 0
+            )
+        }
+    }
+
     private func play(url: URL, lowLatency: Bool) -> Int {
         transitionID += 1
         let startedTransitionID = transitionID
@@ -113,6 +164,45 @@ final class VLCPlaybackController: NSObject, ObservableObject {
         player.media = media
         player.play()
         return startedTransitionID
+    }
+
+    private func uniqueScreenshotURL(in directory: URL) -> URL {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy-MM-dd_HH-mm-ss-SSS"
+        let stem = "MiniCam_\(formatter.string(from: Date()))"
+        var candidate = directory.appendingPathComponent("\(stem).png")
+        var suffix = 2
+        while FileManager.default.fileExists(atPath: candidate.path) {
+            candidate = directory.appendingPathComponent("\(stem)-\(suffix).png")
+            suffix += 1
+        }
+        return candidate
+    }
+
+    private func finishScreenshot(_ result: Result<URL, Error>) {
+        guard let pendingScreenshot else { return }
+        self.pendingScreenshot = nil
+        pendingScreenshot.timeoutTask.cancel()
+        isSavingScreenshot = false
+
+        switch result {
+        case let .success(fileURL):
+            guard
+                let size = try? fileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize,
+                size > 0
+            else {
+                try? FileManager.default.removeItem(at: fileURL)
+                pendingScreenshot.continuation.resume(
+                    throwing: ScreenshotError.emptyFile
+                )
+                return
+            }
+            pendingScreenshot.continuation.resume(returning: fileURL)
+        case let .failure(error):
+            try? FileManager.default.removeItem(at: pendingScreenshot.fileURL)
+            pendingScreenshot.continuation.resume(throwing: error)
+        }
     }
 }
 
@@ -167,6 +257,33 @@ extension VLCPlaybackController: VLCMediaPlayerDelegate {
             } else {
                 self.currentDate = Date()
             }
+        }
+    }
+
+    nonisolated func mediaPlayerSnapshot(_ notification: Notification) {
+        Task { @MainActor [weak self] in
+            guard let self, let pendingScreenshot = self.pendingScreenshot else { return }
+            self.finishScreenshot(.success(pendingScreenshot.fileURL))
+        }
+    }
+}
+
+enum ScreenshotError: LocalizedError {
+    case alreadySaving
+    case frameUnavailable
+    case timedOut
+    case emptyFile
+
+    var errorDescription: String? {
+        switch self {
+        case .alreadySaving:
+            return "Предыдущий скриншот ещё сохраняется."
+        case .frameUnavailable:
+            return "Дождитесь появления видеокадра."
+        case .timedOut:
+            return "Кадр не удалось сохранить вовремя. Попробуйте ещё раз."
+        case .emptyFile:
+            return "VLCKit создал пустой файл скриншота."
         }
     }
 }

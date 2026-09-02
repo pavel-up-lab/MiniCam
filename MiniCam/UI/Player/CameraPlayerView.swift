@@ -17,6 +17,8 @@ struct CameraPlayerView: View {
     @State private var expectedTransitionID: Int?
     @State private var isWaitingForPlaybackStart = false
     @State private var transitionTimeoutTask: Task<Void, Never>?
+    @State private var screenshotNotice: ScreenshotNotice?
+    @State private var screenshotNoticeTask: Task<Void, Never>?
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -42,13 +44,14 @@ struct CameraPlayerView: View {
                 )
                 .padding(16)
 
-            settingsButton
+            topRightControls
                 .frame(
                     maxWidth: .infinity,
                     maxHeight: .infinity,
                     alignment: .topTrailing
                 )
                 .padding(16)
+                .zIndex(20)
 
             MotionEventsPanel(
                 analyzer: container.motionAnalyzer,
@@ -138,8 +141,52 @@ struct CameraPlayerView: View {
         }
         .onDisappear {
             transitionTimeoutTask?.cancel()
+            screenshotNoticeTask?.cancel()
             preview.cancelAndHide()
         }
+    }
+
+    private var topRightControls: some View {
+        VStack(alignment: .trailing, spacing: 8) {
+            HStack(spacing: 8) {
+                screenshotButton
+                settingsButton
+            }
+
+            if let screenshotNotice {
+                Label(screenshotNotice.message, systemImage: screenshotNotice.symbol)
+                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(screenshotNotice.isError ? Color.white : Color.black)
+                    .lineLimit(1)
+                    .padding(.horizontal, 10)
+                    .frame(height: 30)
+                    .background(
+                        screenshotNotice.isError
+                            ? Color(red: 0.85, green: 0.27, blue: 0.22)
+                            : Color(red: 0.73, green: 0.95, blue: 0.18),
+                        in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    )
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+    }
+
+    private var screenshotButton: some View {
+        Button(action: takeScreenshot) {
+            Image(systemName: playback.isSavingScreenshot ? "hourglass" : "camera.fill")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(Color(red: 0.73, green: 0.95, blue: 0.18))
+                .frame(width: 42, height: 42)
+                .background(
+                    Color.black.opacity(0.72),
+                    in: RoundedRectangle(cornerRadius: 9, style: .continuous)
+                )
+        }
+        .buttonStyle(.plain)
+        .disabled(!canTakeScreenshot)
+        .opacity(canTakeScreenshot ? 1 : 0.42)
+        .help("Сохранить текущий кадр")
+        .accessibilityLabel("Сохранить скриншот текущего кадра")
     }
 
     private var settingsButton: some View {
@@ -190,6 +237,58 @@ struct CameraPlayerView: View {
     private func closeSettings() {
         withAnimation(.easeIn(duration: 0.14)) {
             isSettingsPresented = false
+        }
+    }
+
+    private var canTakeScreenshot: Bool {
+        guard !playback.isSavingScreenshot else { return false }
+        switch playback.state {
+        case .live, .archive:
+            return true
+        case .loading, .failed:
+            return false
+        }
+    }
+
+    private func takeScreenshot() {
+        screenshotNoticeTask?.cancel()
+        Task {
+            do {
+                let fileURL = try await container.takeScreenshot()
+                showScreenshotNotice(
+                    ScreenshotNotice(
+                        message: "Сохранён \(fileURL.lastPathComponent)",
+                        symbol: "checkmark.circle.fill",
+                        isError: false
+                    )
+                )
+            } catch {
+                showScreenshotNotice(
+                    ScreenshotNotice(
+                        message: (error as? LocalizedError)?.errorDescription
+                            ?? "Не удалось сохранить скриншот.",
+                        symbol: "exclamationmark.triangle.fill",
+                        isError: true
+                    )
+                )
+            }
+        }
+    }
+
+    private func showScreenshotNotice(_ notice: ScreenshotNotice) {
+        withAnimation(.easeOut(duration: 0.16)) {
+            screenshotNotice = notice
+        }
+        screenshotNoticeTask?.cancel()
+        screenshotNoticeTask = Task {
+            do {
+                try await Task.sleep(nanoseconds: 4_000_000_000)
+            } catch {
+                return
+            }
+            withAnimation(.easeIn(duration: 0.14)) {
+                screenshotNotice = nil
+            }
         }
     }
 
@@ -402,4 +501,10 @@ struct CameraPlayerView: View {
     private func formatted(_ date: Date) -> String {
         date.formatted(date: .abbreviated, time: .standard)
     }
+}
+
+private struct ScreenshotNotice: Equatable {
+    let message: String
+    let symbol: String
+    let isError: Bool
 }

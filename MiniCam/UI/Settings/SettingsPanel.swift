@@ -9,6 +9,7 @@ struct SettingsPanel: View {
 
     @State private var isMotionTrackingEnabled = true
     @State private var externalFolderURL: URL?
+    @State private var screenshotFolderURL: URL?
     @State private var errorMessage: String?
 
     private let accent = Color(red: 0.73, green: 0.95, blue: 0.18)
@@ -19,6 +20,7 @@ struct SettingsPanel: View {
             header
             trackingRow
             storageSection
+            screenshotSection
 
             if let errorMessage {
                 Text(errorMessage)
@@ -165,6 +167,53 @@ struct SettingsPanel: View {
         }
     }
 
+    private var screenshotSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("СКРИНШОТЫ")
+                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                .foregroundStyle(.white.opacity(0.54))
+
+            HStack(alignment: .center, spacing: 12) {
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(screenshotFolderURL == nil ? "Рабочий стол" : "Выбранная папка")
+                        .font(.system(size: 12, weight: .semibold))
+
+                    if let screenshotFolderURL {
+                        Text(screenshotFolderURL.path)
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundStyle(.white.opacity(0.52))
+                            .lineLimit(2)
+                            .truncationMode(.middle)
+                    }
+                }
+
+                Spacer(minLength: 8)
+
+                Button("Выбрать…", action: chooseScreenshotFolder)
+                    .buttonStyle(SettingsSecondaryButtonStyle())
+                    .disabled(container.isApplyingSettings)
+            }
+
+            Label(screenshotFolderDescription, systemImage: screenshotFolderSymbol)
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(screenshotFolderColor)
+
+            if screenshotFolderURL != nil {
+                Button("Вернуть Рабочий стол") {
+                    screenshotFolderURL = nil
+                    errorMessage = nil
+                }
+                .buttonStyle(.plain)
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.62))
+                .disabled(container.isApplyingSettings)
+            }
+        }
+        .padding(13)
+        .background(Color.white.opacity(0.055))
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+
     private var storageDescription: String {
         if container.isApplyingSettings { return "Переносим данные…" }
         switch container.storageStatus {
@@ -189,9 +238,31 @@ struct SettingsPanel: View {
         container.storageStatus.requiresAttention ? .orange : accent
     }
 
+    private var screenshotFolderDescription: String {
+        if container.isScreenshotFolderFallback, screenshotFolderURL != nil {
+            return "Папка недоступна — временно используется Рабочий стол"
+        }
+        return screenshotFolderURL == nil
+            ? "Скриншоты сохраняются на Рабочий стол"
+            : "Папка для новых скриншотов выбрана"
+    }
+
+    private var screenshotFolderSymbol: String {
+        container.isScreenshotFolderFallback && screenshotFolderURL != nil
+            ? "exclamationmark.triangle.fill"
+            : "checkmark.circle.fill"
+    }
+
+    private var screenshotFolderColor: Color {
+        container.isScreenshotFolderFallback && screenshotFolderURL != nil
+            ? .orange
+            : accent
+    }
+
     private func loadDraft() {
         isMotionTrackingEnabled = container.appSettings.isMotionTrackingEnabled
         externalFolderURL = container.currentExternalFolderURL
+        screenshotFolderURL = container.currentCustomScreenshotFolderURL
         errorMessage = nil
     }
 
@@ -209,13 +280,28 @@ struct SettingsPanel: View {
         }
     }
 
+    private func chooseScreenshotFolder() {
+        let panel = NSOpenPanel()
+        panel.title = "Выберите папку для скриншотов MiniCam"
+        panel.prompt = "Выбрать"
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.canCreateDirectories = true
+        if panel.runModal() == .OK {
+            screenshotFolderURL = panel.url
+            errorMessage = nil
+        }
+    }
+
     private func save() {
         errorMessage = nil
         Task {
             do {
                 try await container.applySettings(
                     motionTrackingEnabled: isMotionTrackingEnabled,
-                    externalFolderURL: externalFolderURL
+                    externalFolderURL: externalFolderURL,
+                    screenshotFolderURL: screenshotFolderURL
                 )
                 onSaved()
             } catch {
