@@ -224,6 +224,9 @@ final class VLCPlaybackController: NSObject, ObservableObject {
         startedTransitionID = request.transitionID
         hasLoadedMedia = true
         let media = VLCMedia(url: request.url)
+        if request.lowLatency {
+            media.addOption(":rtsp-tcp")
+        }
         media.addOption(request.lowLatency ? ":network-caching=500" : ":network-caching=750")
         media.addOption(":rtsp-frame-buffer-size=2000000")
 
