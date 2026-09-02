@@ -295,6 +295,11 @@ final class AppContainer: ObservableObject {
             motionAnalyzer.enqueueNewArchive(from: recordingSegments)
             playLive()
             startArchiveRefresh()
+            frameCacheRecorder.start(
+                client: client,
+                profile: profile,
+                credentials: credentials
+            )
         } catch {
             let message = (error as? LocalizedError)?.errorDescription
                 ?? "Не удалось подключиться к камере."
