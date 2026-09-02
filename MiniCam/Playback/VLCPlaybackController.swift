@@ -225,14 +225,9 @@ final class VLCPlaybackController: NSObject, ObservableObject {
     }
 
     private static func makePlayer() -> VLCMediaPlayer {
-        VLCMediaPlayer(options: [
-            "--no-video-title-show",
-            "--no-snapshot-preview",
-            "--no-drop-late-frames",
-            "--no-skip-frames",
-            "--network-caching=500",
-            "--live-caching=500"
-        ])
+        VLCMediaPlayer(options: VLCPlaybackOptions.playerOptions(
+            for: .current
+        ))
     }
 
     private func attachCurrentPlayer() {

@@ -1,5 +1,39 @@
 import Foundation
 
+enum PlaybackArchitecture {
+    case intel
+    case appleSilicon
+
+    static var current: Self {
+#if arch(x86_64)
+        .intel
+#else
+        .appleSilicon
+#endif
+    }
+}
+
+struct VLCPlaybackOptions {
+    static func playerOptions(
+        for architecture: PlaybackArchitecture
+    ) -> [String] {
+        var options = [
+            "--no-video-title-show",
+            "--no-snapshot-preview",
+            "--network-caching=500",
+            "--live-caching=500"
+        ]
+
+        if architecture == .appleSilicon {
+            options += [
+                "--no-drop-late-frames",
+                "--no-skip-frames"
+            ]
+        }
+        return options
+    }
+}
+
 struct LivePlaybackRequestGate {
     let duplicateWindow: TimeInterval
     private var lastAcceptedAt: Date?
