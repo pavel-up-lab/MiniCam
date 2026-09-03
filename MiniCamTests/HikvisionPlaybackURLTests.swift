@@ -7,7 +7,7 @@ final class HikvisionPlaybackURLTests: XCTestCase {
             ISO8601DateFormatter().date(from: "2026-09-01T11:22:33Z")
         )
         let source = try XCTUnwrap(URL(string:
-            "rtsp://192.168.1.122/Streaming/tracks/101?starttime=20260901T110000Z&endtime=20260901T120000Z"
+            "rtsp://192.0.2.10/Streaming/tracks/101?starttime=20260901T110000Z&endtime=20260901T120000Z"
         ))
 
         let result = try XCTUnwrap(

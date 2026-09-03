@@ -1,5 +1,20 @@
 # Third-party notices
 
+## VLCKit
+
+MiniCam uses VLCKit 3.7.2 and the bundled libVLC runtime for RTSP playback.
+VLCKit is distributed by the VideoLAN project under the GNU Lesser General
+Public License version 2.1 or later.
+
+- Project: https://code.videolan.org/videolan/VLCKit
+- Package version: `3.7.2`
+- Dependency definition: `Podfile` and `Podfile.lock`
+- License copy: `ThirdPartyLicenses/VLCKit-LGPL-2.1.txt`
+
+The release package includes the framework dynamically and includes this
+notice and the applicable license text. Corresponding upstream source is
+available from the VideoLAN project.
+
 ## YOLOX-Tiny
 
 MiniCam bundles a Core ML conversion of the YOLOX-Tiny 0.1.1rc0 model from
@@ -31,3 +46,9 @@ GPL and non-free components are disabled.
 The bundled executable contains `x86_64` and `arm64` slices with a minimum
 macOS 12 deployment target. MiniCam starts FFmpeg as a separate executable and
 does not link its application binary with FFmpeg libraries.
+
+## MiniCam license scope
+
+The MIT License in `LICENSE` applies only to original MiniCam source code.
+VLCKit, FFmpeg, YOLOX, their model weights, and other third-party material keep
+their respective upstream licenses.

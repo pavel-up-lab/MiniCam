@@ -1,95 +1,129 @@
 # MiniCam
 
-MiniCam — небольшое нативное приложение для macOS, которое показывает прямой эфир с одной IP-камеры Hikvision и позволяет непрерывно перемещаться назад и вперёд по архиву на microSD с той же страницы.
+[Русская версия](README.ru.md)
 
-## Цель
+MiniCam is a native macOS viewer for a single Hikvision-compatible IP camera. It combines a low-latency live view with a continuous timeline of recordings stored on the camera's microSD card.
 
-Сделать простой просмотр камеры без задержки браузерного интерфейса:
+> **Beta software:** MiniCam has been tested with a limited set of hardware. Camera firmware and ISAPI implementations vary, so archive playback may not work with every model.
 
-- прямой эфир со скоростью и задержкой, сопоставимыми с VLC;
-- единая временная шкала для эфира и архива;
-- переход назад с прямого эфира непосредственно в историю;
-- перемотка вперёд до автоматического возвращения в прямой эфир;
-- чтение существующего круглосуточного архива с microSD камеры;
-- экспорт непрерывного фрагмента архива в MP4 прямо с временной шкалы;
-- локальное распознавание начала движения людей и транспорта;
-- отсутствие отдельного сервера и собственной записи на Mac.
+## Features
 
-## Целевая камера
+- Low-latency RTSP live view.
+- One timeline for live and microSD archive playback.
+- Calendar navigation and precise archive seeking.
+- Play, pause, and 10/30-second step controls.
+- Local motion-event detection for people and vehicles.
+- Event cards with a thumbnail and click-to-seek navigation.
+- PNG snapshots of the displayed live or archive frame.
+- MP4 export of a continuous archive interval up to 30 minutes.
+- Configurable local or external storage for cached frames.
+- No camera cloud account, separate recording server, telemetry, or subscription.
 
-- модель: Hikvision DS-2CD2043G2-IU;
-- локальный адрес по умолчанию: `192.168.1.122`;
-- HTTP-порт по умолчанию: `80`;
-- RTSP-порт по умолчанию: `554`;
-- основной канал: `1`;
-- основной RTSP-поток: `/Streaming/Channels/101`;
-- архив: непрерывная запись 24/7 на microSD.
+All camera credentials remain on the Mac. The password is stored in macOS Keychain.
 
-Адрес и порты являются настройками, а не жёстко заданными значениями. Логин и пароль никогда не сохраняются в репозитории.
+## Requirements
 
-## Системные требования
+- macOS Monterey 12 or later.
+- Intel (`x86_64`) or Apple Silicon (`arm64`) Mac.
+- A camera reachable on the same local network.
+- A Hikvision-compatible ISAPI archive with continuous recording enabled on the camera's microSD card.
+- H.264 is recommended, especially on older Intel Macs.
 
-- macOS Monterey 12 или новее;
-- Intel `x86_64` и Apple Silicon `arm64`;
-- Universal-сборка приложения;
-- локальное сетевое соединение с камерой;
-- Xcode для сборки и личной установки;
-- публикация в Mac App Store в первую версию не входит.
+Tested hardware: **Hikvision DS-2CD2043G2-IU**, channel 1, continuous microSD recording. Other Hikvision and compatible models may work but are not yet verified.
 
-## Технический подход
+## Download and install
 
-- SwiftUI с использованием только API, доступных в macOS 12;
-- стабильная версия VLCKit 3.x для RTSP и воспроизведения архива;
-- Hikvision ISAPI для обнаружения камеры и поиска записей на microSD;
-- встроенный универсальный FFmpeg для сохранения MP4 без перекодирования;
-- Keychain для хранения пароля;
-- локальная модель YOLOX-Tiny Core ML без облака и подписки;
-- локальный журнал без паролей и URL с учётными данными.
+1. Open the [`v0.1.0-beta.1` release](https://github.com/pavel-up-lab/MiniCam/releases/tag/v0.1.0-beta.1).
+2. Download `MiniCam-0.1.0-beta.1-macos-universal.zip` and optionally verify it with `SHA256SUMS.txt`.
+3. Unzip the download and move `MiniCam.app` to the Applications folder.
+4. Open MiniCam.
 
-## Первая версия
+The beta is ad-hoc signed but is **not notarized**, because the project does not currently have an Apple Developer ID certificate. If macOS blocks the first launch:
 
-При первом запуске пользователь указывает адрес, порты, имя пользователя и пароль и проверяет подключение. Главное окно содержит видео, единую временную шкалу, календарь, паузу, звук, полноэкранный режим и кнопку «В прямой эфир».
+1. Try to open MiniCam once.
+2. Open **System Settings → Privacy & Security**.
+3. Find the message about MiniCam and choose **Open Anyway**.
+4. Confirm by choosing **Open**.
 
-Если пользователь перемещает шкалу назад, MiniCam открывает соответствующую запись с microSD. Приложение автоматически продолжает воспроизведение через границы файлов и суток. При достижении текущего времени оно переключается на прямой RTSP-поток.
+Do not disable Gatekeeper globally.
 
-Новые 15-секундные участки архива анализируются в фоне. MiniCam сначала находит изменившуюся область между соседними кадрами, затем увеличивает её и локально проверяет моделью YOLOX-Tiny. Начало движения человека, автомобиля, грузовика, автобуса, мотоцикла или велосипеда появляется в выдвижной правой панели с кадром 720p и временем. Неподвижные объекты не создают события, рамки поверх видео не рисуются. Нажатие на карточку переводит воспроизведение к соответствующему месту. Карточки и изображения хранятся локально три дня.
+## Camera setup
 
-Кнопка с шестерёнкой в правом верхнем углу позволяет отключить распознавание движения, записывать только людей либо людей и транспорт, выбрать срок хранения событий 1, 3 или 7 дней и вручную очистить историю с подтверждением. Новый фильтр применяется только к будущим событиям. Плановая очистка выполняется раз в сутки и удаляет просроченные карточки вместе с их кадрами.
+Before connecting MiniCam:
 
-В тех же настройках можно выбрать внешнюю папку для кадров перемотки и карточек событий. При выборе папки MiniCam безопасно переносит туда существующие данные. Если внешний диск временно отключён, приложение продолжает работу во внутренней папке и автоматически объединяет накопленные данные после восстановления доступа.
+1. Enable continuous 24/7 recording on the camera's microSD card.
+2. Synchronize the camera time and time zone.
+3. Enable RTSP and ISAPI access if the firmware exposes these switches.
+4. Close unnecessary camera browser previews, VLC windows, and other MiniCam copies.
 
-Кнопка с камерой рядом с настройками сохраняет чистый текущий кадр эфира, архива или паузы как PNG исходного разрешения. По умолчанию снимки попадают на Рабочий стол; отдельную папку можно выбрать в настройках независимо от хранилища кадров перемотки.
+At first launch, enter the camera address without a protocol, for example `192.0.2.10`, together with its HTTP and RTSP ports, username, and password. Typical ports are HTTP `80` and RTSP `554`; use the actual values configured on your camera.
 
-На паузе можно потянуть стрелку под центральной линией вправо и выбрать непрерывный участок архива длительностью до 30 минут. Кнопка видео сохраняет выбранный участок одним MP4-файлом в папку снимков. На время выгрузки MiniCam освобождает подключение к камере, а после завершения возвращает эфир или архив в прежнее состояние.
+MiniCam uses Hikvision ISAPI to discover recordings and RTSP to play live and archive video. It does not record a second continuous copy of the stream on the Mac.
 
-В первую версию не входят несколько камер, удалённый доступ, собственная непрерывная запись на диск Mac, анализ старого архива задним числом и публикация в App Store.
+## Motion events
 
-## Ожидаемые ограничения
+MiniCam analyzes only newly added archive intervals while the application is running. It can record the start of motion for people only or for people and vehicles. Static objects do not create events, and detection boxes are not drawn over the video.
 
-- открытие произвольной позиции архива может занимать 1–3 секунды из-за работы камеры и microSD;
-- старые Intel Mac могут использовать программное декодирование, если аппаратное недоступно;
-- H.264 является предпочтительным форматом для совместимости с Intel Mac;
-- краткие технические разрывы между файлами камеры скрываются, когда это возможно;
-- окончательная совместимость архива зависит от возможностей ISAPI конкретной прошивки камеры;
-- камера допускает не более двух одновременных RTSP-сеансов, поэтому фоновый анализ также пополняет кэш кадров перемотки и не создаёт отдельный live-сеанс;
-- выгрузка занимает примерно столько же времени, сколько длится выбранный фрагмент, поскольку камера отдаёт архив в темпе воспроизведения;
-- распознаются только новые архивные данные, появившиеся после подключения приложения; прямой эфир и более старые записи не анализируются;
-- финальный запуск необходимо один раз проверить на реальном Intel Mac с Monterey.
+Detection runs locally using a bundled YOLOX-Tiny Core ML model. Historical recordings from before the application was started are not scanned retroactively.
 
-## Проверки
+## Privacy
 
-Тестов должно быть немного. Автоматически проверяется только логика, которую трудно надёжно оценить визуально:
+- No telemetry or analytics.
+- No MiniCam cloud service.
+- No camera credentials in logs or stored RTSP URLs.
+- Passwords are stored in macOS Keychain.
+- Timeline frames, event thumbnails, and screenshots stay in folders selected by the user.
+- Video and images are not uploaded by MiniCam.
 
-- разбор ответа Hikvision со списком записей;
-- объединение фрагментов в временную шкалу;
-- выбор нужного фрагмента для заданного времени;
-- переключение между архивом и прямым эфиром;
-- граница новых данных для фонового анализа;
-- начало, остановка и повторное начало движения отдельных объектов;
-- автоматическое удаление карточек и кадров старше трёх дней;
-- отсутствие секретов в сохраняемых данных.
-- сохранение настроек и безопасный перенос данных между внутренней и внешней папками.
-- выбор непрерывного интервала для MP4, ограничение 30 минут и отказ при разрыве архива.
-- фильтрация новых событий по типу, плановая очистка по сроку и безопасное полное удаление истории.
+## Known limitations
 
-Качество видео, задержка, перемотка и восстановление соединения проверяются вручную на реальной камере.
+- Only one camera is supported.
+- Remote access and relay services are not included.
+- Archive playback depends on Hikvision ISAPI behavior and camera firmware.
+- Opening an arbitrary archive position may take 1–3 seconds.
+- The camera may permit only two simultaneous RTSP sessions. Extra viewers can cause `453 Not Enough Bandwidth`, a black picture, or a failed export.
+- Archive export is usually close to real time because many cameras deliver playback at recording speed.
+- Motion detection processes only new archive data received while MiniCam is running.
+- The build is not notarized and must be approved manually on first launch.
+
+## Troubleshooting
+
+### Live or archive video is black
+
+Close VLC, browser camera previews, and other MiniCam copies, wait a few seconds, and reconnect. Confirm that the camera has continuous recordings for the selected time.
+
+### `453 Not Enough Bandwidth`
+
+The camera has run out of RTSP sessions or decoder resources. Disconnect other clients before retrying.
+
+### Archive time is incorrect
+
+Set the correct time zone and NTP synchronization on the camera, then reconnect MiniCam.
+
+### No motion events appear
+
+Keep MiniCam running while new archive intervals are created. Check that motion tracking is enabled and that the event filter includes the required object type.
+
+When reporting a problem, include the Mac model and architecture, macOS version, camera model and firmware, video codec, and whether the issue affects live view, archive playback, or both. Never post a camera password or an authenticated RTSP URL.
+
+## Build from source
+
+Requirements:
+
+- Xcode 14 or later.
+- CocoaPods.
+
+```bash
+git clone https://github.com/pavel-up-lab/MiniCam.git
+cd MiniCam
+pod install
+open MiniCam.xcworkspace
+```
+
+Build the shared `MiniCam` scheme from the workspace, not directly from the Xcode project. The Core ML model and universal minimal FFmpeg executable used by the beta are tracked in the repository. Their reproducible conversion/build tools are available in [`Tools`](Tools/).
+
+## License
+
+MiniCam source code is available under the [MIT License](LICENSE). Bundled components retain their own licenses; see [third-party notices](THIRD_PARTY_NOTICES.md) and [`ThirdPartyLicenses`](ThirdPartyLicenses/).
+
+MiniCam is an independent project and is not affiliated with or endorsed by Hikvision or Apple.

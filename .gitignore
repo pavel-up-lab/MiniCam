@@ -3,7 +3,17 @@
 build/
 build-debug/
 build-release/
+build-*/
+release/
 DerivedData/
 Pods/
 *.xcuserstate
 xcuserdata/
+*.xcresult
+*.dSYM/
+*.log
+*.sqlite
+*.sqlite3
+*.db
+*.zip
+SHA256SUMS.txt

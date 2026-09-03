@@ -10,8 +10,7 @@ final class CameraProfileTests: XCTestCase {
         XCTAssertFalse(serialized.localizedCaseInsensitiveContains("username"))
         XCTAssertEqual(
             CameraProfile.defaultCamera.liveStreamURL()?.absoluteString,
-            "rtsp://192.168.1.122:554/Streaming/Channels/101"
+            "rtsp://192.0.2.10:554/Streaming/Channels/101"
         )
     }
 }
-

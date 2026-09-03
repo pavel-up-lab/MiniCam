@@ -2,7 +2,7 @@ import Foundation
 
 struct CameraProfile: Codable, Equatable, Sendable {
     static let defaultCamera = CameraProfile(
-        host: "192.168.1.122",
+        host: "192.0.2.10",
         httpPort: 80,
         rtspPort: 554,
         channel: 1
@@ -35,4 +35,3 @@ enum StreamQuality: Int, Sendable {
     case main = 1
     case sub = 2
 }
-
