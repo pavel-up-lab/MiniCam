@@ -35,6 +35,7 @@ final class ArchiveMotionAnalyzer: ObservableObject {
     private var trackingEnabledAt = Date.distantPast
     private var runGate = ArchiveAnalysisRunGate()
     private var previousAnalysisSample: ArchiveFrameSample?
+    private let diagnostics = PlaybackDiagnostics.shared
 
     init(
         frameCacheStore: FrameCacheStore,
@@ -98,12 +99,14 @@ final class ArchiveMotionAnalyzer: ObservableObject {
     }
 
     func suspendSampling() {
+        diagnostics.record("motion-analysis.suspended")
         runGate.suspend()
         analysisTask?.cancel()
         sampler.stop()
     }
 
     func resumeSampling() {
+        diagnostics.record("motion-analysis.resumed")
         runGate.resume()
         beginProcessingIfNeeded()
     }

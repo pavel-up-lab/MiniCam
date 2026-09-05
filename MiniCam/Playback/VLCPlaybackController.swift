@@ -17,6 +17,7 @@ final class VLCPlaybackController: NSObject, ObservableObject {
     var playbackWillTransition: (() -> Void)?
     var playbackTransitionDidFinish: (() -> Void)?
 
+    private var library: VLCLibrary
     private var player: VLCMediaPlayer
     private var profile: CameraProfile?
     private var credentials: CameraCredentials?
@@ -29,8 +30,16 @@ final class VLCPlaybackController: NSObject, ObservableObject {
     private var liveRequestGate = LivePlaybackRequestGate()
     private var stopFallbackTask: Task<Void, Never>?
     private var releaseDelayTask: Task<Void, Never>?
+    private var videoOutputProbeTask: Task<Void, Never>?
     private var pendingScreenshot: PendingScreenshot?
     private var pauseWhenReady = false
+    private let diagnostics = PlaybackDiagnostics.shared
+    private var playerDiagnosticID: String
+    private var activeSessionID: String?
+    private var timeDiscontinuityDetector = PlaybackTimeDiscontinuityDetector(
+        toleranceMilliseconds: 5
+    )
+    private var receivedTimeUpdateForTransition = false
 
     private static let cameraReleaseDelayNanoseconds: UInt64 = 400_000_000
 
@@ -47,7 +56,10 @@ final class VLCPlaybackController: NSObject, ObservableObject {
     }
 
     override init() {
-        player = Self.makePlayer()
+        let instance = Self.makePlayer()
+        library = instance.library
+        player = instance.player
+        playerDiagnosticID = Self.makePlayerDiagnosticID()
         super.init()
         attachCurrentPlayer()
     }
@@ -55,6 +67,10 @@ final class VLCPlaybackController: NSObject, ObservableObject {
     func configure(profile: CameraProfile, credentials: CameraCredentials) {
         self.profile = profile
         self.credentials = credentials
+        diagnostics.configureSensitiveValues([
+            credentials.username,
+            credentials.password
+        ])
         liveRequestGate.reset()
     }
 
@@ -104,6 +120,9 @@ final class VLCPlaybackController: NSObject, ObservableObject {
         stopFallbackTask = nil
         releaseDelayTask?.cancel()
         releaseDelayTask = nil
+        videoOutputProbeTask?.cancel()
+        videoOutputProbeTask = nil
+        requestCurrentSessionStop()
         player.stop()
     }
 
@@ -121,6 +140,9 @@ final class VLCPlaybackController: NSObject, ObservableObject {
         stopFallbackTask = nil
         releaseDelayTask?.cancel()
         releaseDelayTask = nil
+        videoOutputProbeTask?.cancel()
+        videoOutputProbeTask = nil
+        requestCurrentSessionStop()
         player.stop()
         hasLoadedMedia = false
         activeSegment = nil
@@ -200,6 +222,15 @@ final class VLCPlaybackController: NSObject, ObservableObject {
         transitionID += 1
         let startedTransitionID = transitionID
         isAwaitingFirstFrame = true
+        receivedTimeUpdateForTransition = false
+        diagnostics.record(
+            "playback.transition",
+            fields: [
+                "stream": lowLatency ? "live" : "archive",
+                "transition": String(startedTransitionID),
+                "transport": lowLatency ? "tcp" : "udp"
+            ]
+        )
         let request = PlaybackRequest(
             url: url,
             lowLatency: lowLatency,
@@ -211,6 +242,7 @@ final class VLCPlaybackController: NSObject, ObservableObject {
         case .startNow:
             start(request)
         case .stopPlayer:
+            requestCurrentSessionStop()
             player.stop()
             scheduleStopFallback()
         case .wait:
@@ -223,6 +255,9 @@ final class VLCPlaybackController: NSObject, ObservableObject {
         guard request.transitionID == transitionID else { return }
         startedTransitionID = request.transitionID
         hasLoadedMedia = true
+        let sessionID = playerDiagnosticID
+        activeSessionID = sessionID
+        diagnostics.sessionOpened(id: sessionID, owner: .main)
         let media = VLCMedia(url: request.url)
         if request.lowLatency {
             media.addOption(":rtsp-tcp")
@@ -236,7 +271,17 @@ final class VLCPlaybackController: NSObject, ObservableObject {
         }
 
         player.media = media
+        diagnostics.record(
+            "playback.play-requested",
+            fields: [
+                "player": playerDiagnosticID,
+                "stream": request.lowLatency ? "live" : "archive",
+                "transition": String(request.transitionID),
+                "transport": request.lowLatency ? "tcp" : "udp"
+            ]
+        )
         player.play()
+        startVideoOutputProbe(transitionID: request.transitionID)
     }
 
     private func scheduleStopFallback() {
@@ -282,15 +327,24 @@ final class VLCPlaybackController: NSObject, ObservableObject {
         start(request)
     }
 
-    private static func makePlayer() -> VLCMediaPlayer {
-        VLCMediaPlayer(options: [
+    private static func makePlayer() -> (
+        library: VLCLibrary,
+        player: VLCMediaPlayer
+    ) {
+        let options = [
             "--no-video-title-show",
             "--no-snapshot-preview",
             "--no-drop-late-frames",
             "--no-skip-frames",
             "--network-caching=500",
             "--live-caching=500"
-        ])
+        ]
+        let library = VLCLibrary(options: options)
+        VLCPlaybackDiagnosticLogger.install(
+            on: library,
+            diagnostics: PlaybackDiagnostics.shared
+        )
+        return (library, VLCMediaPlayer(library: library))
     }
 
     private func attachCurrentPlayer() {
@@ -301,10 +355,83 @@ final class VLCPlaybackController: NSObject, ObservableObject {
 
     private func replacePlayer() {
         let previousPlayer = player
+        let previousPlayerID = playerDiagnosticID
         previousPlayer.delegate = nil
         previousPlayer.drawable = nil
-        player = Self.makePlayer()
+        releaseCurrentSession()
+        diagnostics.record(
+            "playback.player-detached",
+            fields: ["player": previousPlayerID]
+        )
+        let instance = Self.makePlayer()
+        library = instance.library
+        player = instance.player
+        playerDiagnosticID = Self.makePlayerDiagnosticID()
         attachCurrentPlayer()
+        diagnostics.record(
+            "playback.player-replaced",
+            fields: [
+                "new": playerDiagnosticID,
+                "previous": previousPlayerID
+            ]
+        )
+    }
+
+    private static func makePlayerDiagnosticID() -> String {
+        "main-\(UUID().uuidString.prefix(8))"
+    }
+
+    private func requestCurrentSessionStop() {
+        guard let activeSessionID else { return }
+        diagnostics.sessionStopRequested(id: activeSessionID, owner: .main)
+    }
+
+    private func releaseCurrentSession() {
+        guard let activeSessionID else { return }
+        diagnostics.sessionReleased(id: activeSessionID, owner: .main)
+        self.activeSessionID = nil
+    }
+
+    private func startVideoOutputProbe(transitionID: Int) {
+        videoOutputProbeTask?.cancel()
+        videoOutputProbeTask = Task { [weak self] in
+            guard let self else { return }
+            let startedAt = Date()
+            for _ in 0..<30 {
+                guard !Task.isCancelled else { return }
+                guard transitionID == self.transitionID else { return }
+                if
+                    self.receivedTimeUpdateForTransition,
+                    self.player.hasVideoOut,
+                    self.videoView.hasVideo
+                {
+                    self.diagnostics.record(
+                        "playback.video-output",
+                        fields: [
+                            "delay-ms": String(Int(Date().timeIntervalSince(startedAt) * 1_000)),
+                            "player": self.playerDiagnosticID,
+                            "transition": String(transitionID)
+                        ]
+                    )
+                    return
+                }
+                do {
+                    try await Task.sleep(nanoseconds: 100_000_000)
+                } catch {
+                    return
+                }
+            }
+            self.diagnostics.record(
+                "playback.video-output-timeout",
+                fields: [
+                    "player": self.playerDiagnosticID,
+                    "player-video": String(self.player.hasVideoOut),
+                    "time-update": String(self.receivedTimeUpdateForTransition),
+                    "view-video": String(self.videoView.hasVideo),
+                    "transition": String(transitionID)
+                ]
+            )
+        }
     }
 
     private func uniqueScreenshotURL(in directory: URL) -> URL {
@@ -357,8 +484,25 @@ extension VLCPlaybackController: VLCMediaPlayerDelegate {
 
             switch self.player.state {
             case .stopped:
+                self.diagnostics.record(
+                    "playback.stopped",
+                    fields: [
+                        "player": self.playerDiagnosticID,
+                        "transition": String(self.transitionID)
+                    ]
+                )
+                if !self.transitionQueue.isWaitingForStop {
+                    self.releaseCurrentSession()
+                }
                 self.scheduleReleaseCompletion()
             case .playing:
+                self.diagnostics.record(
+                    "playback.playing",
+                    fields: [
+                        "player": self.playerDiagnosticID,
+                        "transition": String(self.transitionID)
+                    ]
+                )
                 if let segment = self.activeSegment {
                     self.state = .archive(self.currentDate.clamped(to: segment.start...segment.end))
                 } else {
@@ -366,11 +510,13 @@ extension VLCPlaybackController: VLCMediaPlayerDelegate {
                 }
             case .ended:
                 self.hasLoadedMedia = false
+                self.releaseCurrentSession()
                 if self.activeSegment != nil {
                     self.archiveDidFinish?()
                 }
             case .error:
                 self.hasLoadedMedia = false
+                self.releaseCurrentSession()
                 self.isPaused = false
                 self.state = .failed(.cameraUnavailable)
                 self.playbackTransitionDidFinish?()
@@ -388,6 +534,21 @@ extension VLCPlaybackController: VLCMediaPlayerDelegate {
             guard ObjectIdentifier(self.player) == sourceID else { return }
             guard self.startedTransitionID == self.transitionID else {
                 return
+            }
+            self.receivedTimeUpdateForTransition = true
+            let playbackMilliseconds = self.player.time.value?.int64Value ?? 0
+            if let discontinuity = self.timeDiscontinuityDetector.observe(
+                milliseconds: playbackMilliseconds,
+                transitionID: self.transitionID
+            ) {
+                self.diagnostics.record(
+                    "playback.time-backward",
+                    fields: [
+                        "current-ms": String(discontinuity.currentMilliseconds),
+                        "previous-ms": String(discontinuity.previousMilliseconds),
+                        "transition": String(discontinuity.transitionID)
+                    ]
+                )
             }
             if
                 self.isAwaitingFirstFrame

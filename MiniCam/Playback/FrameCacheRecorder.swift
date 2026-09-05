@@ -26,6 +26,7 @@ final class FrameCacheRecorder: NSObject {
         let height: Int
     }
 
+    private let library: VLCLibrary
     private let player: VLCMediaPlayer
     private let store: FrameCacheStore
     private var captureTask: Task<Void, Never>?
@@ -33,15 +34,23 @@ final class FrameCacheRecorder: NSObject {
     private var pendingSnapshot: PendingSnapshot?
     private var sourceMode = SourceMode.idle
     private var consecutiveHTTPFailures = 0
+    private let diagnostics = PlaybackDiagnostics.shared
+    private var activeSessionID: String?
 
     init(store: FrameCacheStore) {
         self.store = store
-        player = VLCMediaPlayer(options: [
+        let options = [
             "--quiet",
             "--no-video-title-show",
             "--network-caching=300",
             "--live-caching=300"
-        ])
+        ]
+        library = VLCLibrary(options: options)
+        VLCPlaybackDiagnosticLogger.install(
+            on: library,
+            diagnostics: PlaybackDiagnostics.shared
+        )
+        player = VLCMediaPlayer(library: library)
         super.init()
         videoView.fillScreen = true
         player.drawable = videoView
@@ -83,6 +92,9 @@ final class FrameCacheRecorder: NSObject {
     }
 
     func stop() {
+        if let activeSessionID {
+            diagnostics.sessionStopRequested(id: activeSessionID, owner: .frameCache)
+        }
         sourceMode = .idle
         captureTask?.cancel()
         captureTask = nil
@@ -134,6 +146,9 @@ final class FrameCacheRecorder: NSObject {
         }
 
         sourceMode = .rtspFallback
+        let sessionID = "cache-\(UUID().uuidString.prefix(8))"
+        activeSessionID = sessionID
+        diagnostics.sessionOpened(id: sessionID, owner: .frameCache)
         let media = VLCMedia(url: url)
         media.addOption(":no-audio")
         media.addOption(":network-caching=300")
@@ -245,9 +260,34 @@ final class FrameCacheRecorder: NSObject {
 }
 
 extension FrameCacheRecorder: VLCMediaPlayerDelegate {
+    nonisolated func mediaPlayerStateChanged(_ notification: Notification) {
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            switch self.player.state {
+            case .playing:
+                self.diagnostics.record(
+                    "frame-cache.rtsp-playing",
+                    fields: ["session": self.activeSessionID ?? "none"]
+                )
+            case .stopped, .ended, .error:
+                self.releaseActiveSession()
+            default:
+                break
+            }
+        }
+    }
+
     nonisolated func mediaPlayerSnapshot(_ notification: Notification) {
         Task { @MainActor [weak self] in
             self?.finishRTSPSnapshot()
         }
+    }
+}
+
+private extension FrameCacheRecorder {
+    func releaseActiveSession() {
+        guard let activeSessionID else { return }
+        diagnostics.sessionReleased(id: activeSessionID, owner: .frameCache)
+        self.activeSessionID = nil
     }
 }

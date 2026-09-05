@@ -22,6 +22,7 @@ final class ArchiveFrameSampler: NSObject {
         let fileURL: URL
     }
 
+    private let library: VLCLibrary
     private let player: VLCMediaPlayer
     private var activeSlice: ArchiveAnalysisSlice?
     private var continuation: CheckedContinuation<[ArchiveFrameSample], Error>?
@@ -31,14 +32,22 @@ final class ArchiveFrameSampler: NSObject {
     private var hasEnded = false
     private var timeoutTask: Task<Void, Never>?
     private var snapshotTimeoutTask: Task<Void, Never>?
+    private let diagnostics = PlaybackDiagnostics.shared
+    private var activeSessionID: String?
 
     override init() {
-        player = VLCMediaPlayer(options: [
+        let options = [
             "--quiet",
             "--no-video-title-show",
             "--no-audio",
             "--network-caching=300"
-        ])
+        ]
+        library = VLCLibrary(options: options)
+        VLCPlaybackDiagnosticLogger.install(
+            on: library,
+            diagnostics: PlaybackDiagnostics.shared
+        )
+        player = VLCMediaPlayer(library: library)
         super.init()
         videoView.fillScreen = true
         player.drawable = videoView
@@ -79,6 +88,9 @@ final class ArchiveFrameSampler: NSObject {
                 media.addOption(":rtsp-pwd=\(credentials.password)")
                 player.media = media
                 player.rate = Self.playbackRate
+                let sessionID = "sampler-\(UUID().uuidString.prefix(8))"
+                activeSessionID = sessionID
+                diagnostics.sessionOpened(id: sessionID, owner: .archiveSampler)
                 player.play()
 
                 let duration = max(15, slice.end.timeIntervalSince(slice.start) + 8)
@@ -210,6 +222,9 @@ final class ArchiveFrameSampler: NSObject {
         pendingSnapshot = nil
         activeSlice = nil
         hasEnded = false
+        if let activeSessionID {
+            diagnostics.sessionStopRequested(id: activeSessionID, owner: .archiveSampler)
+        }
         player.stop()
         continuation.resume(with: result)
     }
@@ -255,12 +270,20 @@ extension ArchiveFrameSampler: VLCMediaPlayerDelegate {
             guard let self else { return }
             switch self.player.state {
             case .playing:
+                self.diagnostics.record(
+                    "archive-sampler.playing",
+                    fields: ["session": self.activeSessionID ?? "none"]
+                )
                 self.player.rate = Self.playbackRate
                 self.captureIfNeeded()
             case .ended:
+                self.releaseActiveSession()
                 self.playbackEnded()
             case .error:
+                self.releaseActiveSession()
                 self.complete(.failure(ArchiveFrameSamplerError.playbackFailed))
+            case .stopped:
+                self.releaseActiveSession()
             default:
                 break
             }
@@ -277,6 +300,14 @@ extension ArchiveFrameSampler: VLCMediaPlayerDelegate {
         Task { @MainActor [weak self] in
             self?.finishSnapshot()
         }
+    }
+}
+
+private extension ArchiveFrameSampler {
+    func releaseActiveSession() {
+        guard let activeSessionID else { return }
+        diagnostics.sessionReleased(id: activeSessionID, owner: .archiveSampler)
+        self.activeSessionID = nil
     }
 }
 

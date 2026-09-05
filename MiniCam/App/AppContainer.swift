@@ -55,6 +55,9 @@ final class AppContainer: ObservableObject {
     private var activeVideoExporter: VideoClipExporter?
     private var applicationTerminationObserver: NSObjectProtocol?
     private var isMaintainingMotionEvents = false
+    private let playbackExperiment = ArchivePlaybackExperiment.current
+    private let playbackDiagnostics = PlaybackDiagnostics.shared
+    private var vlcDiagnosticLogger: VLCPlaybackDiagnosticLogger?
 
     init(
         profileStore: ProfileStore = ProfileStore(),
@@ -89,6 +92,10 @@ final class AppContainer: ObservableObject {
         self.profileStore = profileStore
         self.credentialStore = credentialStore
         profile = profileStore.load()
+        playbackDiagnostics.begin(experiment: playbackExperiment)
+        vlcDiagnosticLogger = VLCPlaybackDiagnosticLogger.install(
+            diagnostics: playbackDiagnostics
+        )
         motionAnalyzer.setMotionTrackingEnabled(settings.isMotionTrackingEnabled)
         motionAnalyzer.setMotionEventRecordingMode(settings.motionEventRecordingMode)
         playbackController.playbackWillTransition = { [weak self] in
@@ -287,7 +294,7 @@ final class AppContainer: ObservableObject {
         }
 
         await restorePlayback(after: restorePoint)
-        if let cameraClient {
+        if let cameraClient, playbackExperiment == .baseline {
             frameCacheRecorder.start(
                 client: cameraClient,
                 profile: profile,
@@ -435,6 +442,11 @@ final class AppContainer: ObservableObject {
             return
         }
 
+        playbackDiagnostics.configureSensitiveValues([
+            credentials.username,
+            credentials.password
+        ])
+
         frameCacheRecorder.stop()
         motionAnalyzer.stop()
         stopArchiveRefresh()
@@ -463,15 +475,21 @@ final class AppContainer: ObservableObject {
             }
             connectionState = .connected(identity)
             isReady = true
-            motionAnalyzer.start(at: analysisStart, credentials: credentials)
-            motionAnalyzer.enqueueNewArchive(from: recordingSegments)
+            if playbackExperiment == .baseline {
+                motionAnalyzer.start(at: analysisStart, credentials: credentials)
+                motionAnalyzer.enqueueNewArchive(from: recordingSegments)
+            } else {
+                playbackDiagnostics.record("background-playback.disabled")
+            }
             playLive()
             startArchiveRefresh()
-            frameCacheRecorder.start(
-                client: client,
-                profile: profile,
-                credentials: credentials
-            )
+            if playbackExperiment == .baseline {
+                frameCacheRecorder.start(
+                    client: client,
+                    profile: profile,
+                    credentials: credentials
+                )
+            }
         } catch {
             let message = (error as? LocalizedError)?.errorDescription
                 ?? "Не удалось подключиться к камере."
