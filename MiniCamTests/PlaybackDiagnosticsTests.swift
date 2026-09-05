@@ -114,6 +114,15 @@ final class ArchivePlaybackExperimentTests: XCTestCase {
         XCTAssertEqual(experiment, .foregroundOnly)
     }
 
+    func testResolvesFFplayUDPExperimentInDebug() {
+        let experiment = ArchivePlaybackExperiment.resolve(
+            arguments: ["MiniCam", "--archive-playback-experiment=ffplay-udp"],
+            debugEnabled: true
+        )
+
+        XCTAssertEqual(experiment, .ffplayUDP)
+    }
+
     func testUnknownOrConflictingDebugExperimentsFallBackToBaseline() {
         let unknown = ArchivePlaybackExperiment.resolve(
             arguments: ["MiniCam", "--archive-playback-experiment=unknown"],
@@ -139,5 +148,43 @@ final class ArchivePlaybackExperimentTests: XCTestCase {
         )
 
         XCTAssertEqual(experiment, .baseline)
+    }
+}
+
+final class FFplayArchiveDiagnosticTests: XCTestCase {
+    func testInvocationContainsOnlyManifestPathAndNoCameraSecret() {
+        let invocation = FFplayArchiveDiagnostic.invocation(
+            ffplayURL: URL(fileURLWithPath: "/usr/local/bin/ffplay"),
+            manifestURL: URL(fileURLWithPath: "/tmp/minicam-input.ffconcat")
+        )
+        let arguments = invocation.arguments.joined(separator: " ")
+
+        XCTAssertFalse(arguments.contains("rtsp://"))
+        XCTAssertFalse(arguments.contains("camera-user"))
+        XCTAssertFalse(arguments.contains("camera-password"))
+        XCTAssertTrue(arguments.contains("/tmp/minicam-input.ffconcat"))
+        XCTAssertFalse(arguments.contains("rtsp_transport"))
+    }
+
+    func testManifestPercentEncodesCredentialsAndEscapesPath() throws {
+        let sourceURL = try XCTUnwrap(
+            URL(string: "rtsp://192.0.2.10/archive?starttime=20260905T100000Z")
+        )
+        let credentials = CameraCredentials(
+            username: "camera user",
+            password: "secret/password"
+        )
+
+        let manifest = try FFplayArchiveDiagnostic.manifest(
+            sourceURL: sourceURL,
+            credentials: credentials,
+            transport: .udp
+        )
+
+        XCTAssertTrue(manifest.hasPrefix("ffconcat version 1.0\nfile 'rtsp://"))
+        XCTAssertTrue(manifest.contains("camera%20user"))
+        XCTAssertTrue(manifest.contains("secret%2Fpassword"))
+        XCTAssertTrue(manifest.contains("option rtsp_transport udp"))
+        XCTAssertEqual(manifest.filter { $0 == "\n" }.count, 3)
     }
 }

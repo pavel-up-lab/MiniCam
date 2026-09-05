@@ -2,6 +2,7 @@ import Foundation
 
 enum ArchivePlaybackExperiment: String {
     case baseline
+    case ffplayUDP = "ffplay-udp"
     case foregroundOnly = "foreground-only"
 
     static var current: ArchivePlaybackExperiment {

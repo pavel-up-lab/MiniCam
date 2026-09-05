@@ -481,7 +481,11 @@ final class AppContainer: ObservableObject {
             } else {
                 playbackDiagnostics.record("background-playback.disabled")
             }
-            playLive()
+            if playbackExperiment == .ffplayUDP {
+                playbackDiagnostics.record("foreground-playback.skipped")
+            } else {
+                playLive()
+            }
             startArchiveRefresh()
             if playbackExperiment == .baseline {
                 frameCacheRecorder.start(
@@ -542,6 +546,10 @@ final class AppContainer: ObservableObject {
     }
 
     func playLive() {
+        if playbackExperiment == .ffplayUDP {
+            playbackDiagnostics.record("foreground-playback.skipped")
+            return
+        }
         cancelArchiveContinuation()
         pausedLiveDate = nil
         playbackController.playLive()

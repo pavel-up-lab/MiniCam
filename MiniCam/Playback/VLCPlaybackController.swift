@@ -40,6 +40,8 @@ final class VLCPlaybackController: NSObject, ObservableObject {
         toleranceMilliseconds: 5
     )
     private var receivedTimeUpdateForTransition = false
+    private let playbackExperiment = ArchivePlaybackExperiment.current
+    private let ffplayDiagnostic = FFplayArchiveDiagnostic()
 
     private static let cameraReleaseDelayNanoseconds: UInt64 = 400_000_000
 
@@ -76,6 +78,7 @@ final class VLCPlaybackController: NSObject, ObservableObject {
 
     @discardableResult
     func playLive() -> Int? {
+        ffplayDiagnostic.stop()
         guard let profile, let url = profile.liveStreamURL() else {
             state = .failed(.invalidAddress)
             return nil
@@ -102,6 +105,14 @@ final class VLCPlaybackController: NSObject, ObservableObject {
             return nil
         }
 
+        if playbackExperiment == .ffplayUDP {
+            return playArchiveInFFplay(
+                sourceURL: url,
+                segment: segment,
+                date: date
+            )
+        }
+
         liveRequestGate.reset()
 
         activeSegment = segment
@@ -113,6 +124,7 @@ final class VLCPlaybackController: NSObject, ObservableObject {
     }
 
     func stop() {
+        ffplayDiagnostic.stop()
         isPaused = false
         pauseWhenReady = false
         transitionQueue.reset()
@@ -155,6 +167,46 @@ final class VLCPlaybackController: NSObject, ObservableObject {
             return
         }
         replacePlayer()
+    }
+
+    private func playArchiveInFFplay(
+        sourceURL: URL,
+        segment: RecordingSegment,
+        date: Date
+    ) -> Int? {
+        guard let credentials else {
+            state = .failed(.cameraUnavailable)
+            return nil
+        }
+        playbackWillTransition?()
+        transitionID += 1
+        let requestedTransitionID = transitionID
+        state = .loading(date)
+        ffplayDiagnostic.stop()
+
+        Task { [weak self] in
+            guard let self else { return }
+            await self.releaseForExternalTransport()
+            guard requestedTransitionID == self.transitionID else { return }
+            do {
+                try self.ffplayDiagnostic.start(
+                    sourceURL: sourceURL,
+                    credentials: credentials,
+                    transport: .udp
+                )
+                self.activeSegment = segment
+                self.activePlaybackStart = date
+                self.currentDate = date
+                self.state = .archive(date)
+                self.readyTransitionID = requestedTransitionID
+                self.playbackTransitionDidFinish?()
+            } catch {
+                self.diagnostics.record("ffplay.launch-failed")
+                self.state = .failed(.cameraUnavailable)
+                self.playbackTransitionDidFinish?()
+            }
+        }
+        return requestedTransitionID
     }
 
     func pause() {
