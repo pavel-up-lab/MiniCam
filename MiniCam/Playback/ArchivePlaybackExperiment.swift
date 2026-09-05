@@ -1,5 +1,21 @@
 import Foundation
 
+enum PlaybackArchitecture {
+    case arm64
+    case x86_64
+    case other
+
+    static var current: PlaybackArchitecture {
+#if arch(arm64)
+        return .arm64
+#elseif arch(x86_64)
+        return .x86_64
+#else
+        return .other
+#endif
+    }
+}
+
 enum ArchivePlaybackExperiment: String {
     case baseline
     case defaultFramePolicy = "default-frame-policy"
@@ -20,8 +36,17 @@ enum ArchivePlaybackExperiment: String {
         self == .softwareDecoding && !lowLatency
     }
 
-    func usesDefaultFramePolicy(lowLatency: Bool) -> Bool {
-        self == .defaultFramePolicy && !lowLatency
+    func usesDefaultFramePolicy(
+        lowLatency: Bool,
+        architecture: PlaybackArchitecture = .current
+    ) -> Bool {
+        guard !lowLatency else { return false }
+
+        if self == .defaultFramePolicy {
+            return true
+        }
+
+        return self == .baseline && architecture == .arm64
     }
 
     static var current: ArchivePlaybackExperiment {

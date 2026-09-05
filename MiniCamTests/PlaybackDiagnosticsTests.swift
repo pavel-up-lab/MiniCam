@@ -152,10 +152,52 @@ final class ArchivePlaybackExperimentTests: XCTestCase {
         )
 
         XCTAssertEqual(experiment, .defaultFramePolicy)
-        XCTAssertTrue(experiment.usesDefaultFramePolicy(lowLatency: false))
-        XCTAssertFalse(experiment.usesDefaultFramePolicy(lowLatency: true))
+        XCTAssertTrue(
+            experiment.usesDefaultFramePolicy(
+                lowLatency: false,
+                architecture: .x86_64
+            )
+        )
+        XCTAssertFalse(
+            experiment.usesDefaultFramePolicy(
+                lowLatency: true,
+                architecture: .arm64
+            )
+        )
         XCTAssertFalse(experiment.usesSoftwareDecoding(lowLatency: false))
         XCTAssertTrue(experiment.usesBackgroundPlayback)
+    }
+
+    func testBaselineUsesDefaultArchiveFramePolicyOnlyOnAppleSilicon() {
+        let experiment = ArchivePlaybackExperiment.baseline
+
+        XCTAssertTrue(
+            experiment.usesDefaultFramePolicy(
+                lowLatency: false,
+                architecture: .arm64
+            )
+        )
+        XCTAssertFalse(
+            experiment.usesDefaultFramePolicy(
+                lowLatency: false,
+                architecture: .x86_64
+            )
+        )
+        XCTAssertFalse(
+            experiment.usesDefaultFramePolicy(
+                lowLatency: false,
+                architecture: .other
+            )
+        )
+    }
+
+    func testBaselineKeepsExistingLiveFramePolicyOnAppleSilicon() {
+        XCTAssertFalse(
+            ArchivePlaybackExperiment.baseline.usesDefaultFramePolicy(
+                lowLatency: true,
+                architecture: .arm64
+            )
+        )
     }
 
     func testUnknownOrConflictingDebugExperimentsFallBackToBaseline() {
