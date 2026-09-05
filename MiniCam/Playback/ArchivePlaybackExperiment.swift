@@ -46,7 +46,8 @@ enum ArchivePlaybackExperiment: String {
             return true
         }
 
-        return self == .baseline && architecture == .arm64
+        return architecture == .arm64
+            && (self == .baseline || self == .foregroundOnly)
     }
 
     static var current: ArchivePlaybackExperiment {

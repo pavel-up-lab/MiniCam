@@ -112,6 +112,19 @@ final class ArchivePlaybackExperimentTests: XCTestCase {
         )
 
         XCTAssertEqual(experiment, .foregroundOnly)
+        XCTAssertFalse(experiment.usesBackgroundPlayback)
+        XCTAssertTrue(
+            experiment.usesDefaultFramePolicy(
+                lowLatency: false,
+                architecture: .arm64
+            )
+        )
+        XCTAssertFalse(
+            experiment.usesDefaultFramePolicy(
+                lowLatency: false,
+                architecture: .x86_64
+            )
+        )
     }
 
     func testResolvesFFplayUDPExperimentInDebug() {
