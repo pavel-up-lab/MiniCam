@@ -19,6 +19,7 @@ final class VLCPlaybackController: NSObject, ObservableObject {
 
     private var library: VLCLibrary
     private var player: VLCMediaPlayer
+    private var playerUsesSoftwareDecoding: Bool
     private var profile: CameraProfile?
     private var credentials: CameraCredentials?
     private var activeSegment: RecordingSegment?
@@ -40,6 +41,7 @@ final class VLCPlaybackController: NSObject, ObservableObject {
         toleranceMilliseconds: 5
     )
     private var receivedTimeUpdateForTransition = false
+    private var desiredSoftwareDecoding = false
     private let playbackExperiment = ArchivePlaybackExperiment.current
     private let ffplayDiagnostic = FFplayArchiveDiagnostic()
 
@@ -58,9 +60,10 @@ final class VLCPlaybackController: NSObject, ObservableObject {
     }
 
     override init() {
-        let instance = Self.makePlayer()
+        let instance = Self.makePlayer(softwareDecoding: false)
         library = instance.library
         player = instance.player
+        playerUsesSoftwareDecoding = false
         playerDiagnosticID = Self.makePlayerDiagnosticID()
         super.init()
         attachCurrentPlayer()
@@ -217,7 +220,7 @@ final class VLCPlaybackController: NSObject, ObservableObject {
             return .udp
         case .ffplayTCP:
             return .tcp
-        case .baseline, .foregroundOnly:
+        case .baseline, .foregroundOnly, .softwareDecoding:
             return nil
         }
     }
@@ -291,6 +294,9 @@ final class VLCPlaybackController: NSObject, ObservableObject {
         diagnostics.record(
             "playback.transition",
             fields: [
+                "decoder": playbackExperiment.usesSoftwareDecoding(lowLatency: lowLatency)
+                    ? "software"
+                    : "default",
                 "stream": lowLatency ? "live" : "archive",
                 "transition": String(startedTransitionID),
                 "transport": lowLatency ? "tcp" : "udp"
@@ -301,6 +307,13 @@ final class VLCPlaybackController: NSObject, ObservableObject {
             lowLatency: lowLatency,
             transitionID: startedTransitionID
         )
+
+        desiredSoftwareDecoding = playbackExperiment.usesSoftwareDecoding(
+            lowLatency: lowLatency
+        )
+        if !hasLoadedMedia, playerUsesSoftwareDecoding != desiredSoftwareDecoding {
+            replacePlayer()
+        }
 
         let action = transitionQueue.schedule(request, playerNeedsStop: hasLoadedMedia)
         switch action {
@@ -392,11 +405,11 @@ final class VLCPlaybackController: NSObject, ObservableObject {
         start(request)
     }
 
-    private static func makePlayer() -> (
+    private static func makePlayer(softwareDecoding: Bool) -> (
         library: VLCLibrary,
         player: VLCMediaPlayer
     ) {
-        let options = [
+        var options = [
             "--no-video-title-show",
             "--no-snapshot-preview",
             "--no-drop-late-frames",
@@ -404,10 +417,15 @@ final class VLCPlaybackController: NSObject, ObservableObject {
             "--network-caching=500",
             "--live-caching=500"
         ]
+        if softwareDecoding {
+            options.append("--codec=avcodec,none")
+            options.append("--avcodec-hw=none")
+        }
         let library = VLCLibrary(options: options)
         VLCPlaybackDiagnosticLogger.install(
             on: library,
-            diagnostics: PlaybackDiagnostics.shared
+            diagnostics: PlaybackDiagnostics.shared,
+            source: "main"
         )
         return (library, VLCMediaPlayer(library: library))
     }
@@ -428,14 +446,18 @@ final class VLCPlaybackController: NSObject, ObservableObject {
             "playback.player-detached",
             fields: ["player": previousPlayerID]
         )
-        let instance = Self.makePlayer()
+        let instance = Self.makePlayer(
+            softwareDecoding: desiredSoftwareDecoding
+        )
         library = instance.library
         player = instance.player
+        playerUsesSoftwareDecoding = desiredSoftwareDecoding
         playerDiagnosticID = Self.makePlayerDiagnosticID()
         attachCurrentPlayer()
         diagnostics.record(
             "playback.player-replaced",
             fields: [
+                "decoder": playerUsesSoftwareDecoding ? "software" : "default",
                 "new": playerDiagnosticID,
                 "previous": previousPlayerID
             ]

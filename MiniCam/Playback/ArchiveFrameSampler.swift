@@ -45,7 +45,8 @@ final class ArchiveFrameSampler: NSObject {
         library = VLCLibrary(options: options)
         VLCPlaybackDiagnosticLogger.install(
             on: library,
-            diagnostics: PlaybackDiagnostics.shared
+            diagnostics: PlaybackDiagnostics.shared,
+            source: "archiveSampler"
         )
         player = VLCMediaPlayer(library: library)
         super.init()

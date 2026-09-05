@@ -133,6 +133,18 @@ final class ArchivePlaybackExperimentTests: XCTestCase {
         XCTAssertTrue(experiment.usesFFplay)
     }
 
+    func testSoftwareDecodingAppliesOnlyToArchiveAndKeepsBackgroundBaseline() {
+        let experiment = ArchivePlaybackExperiment.resolve(
+            arguments: ["MiniCam", "--archive-playback-experiment=software-decoding"],
+            debugEnabled: true
+        )
+
+        XCTAssertEqual(experiment, .softwareDecoding)
+        XCTAssertTrue(experiment.usesSoftwareDecoding(lowLatency: false))
+        XCTAssertFalse(experiment.usesSoftwareDecoding(lowLatency: true))
+        XCTAssertTrue(experiment.usesBackgroundPlayback)
+    }
+
     func testUnknownOrConflictingDebugExperimentsFallBackToBaseline() {
         let unknown = ArchivePlaybackExperiment.resolve(
             arguments: ["MiniCam", "--archive-playback-experiment=unknown"],

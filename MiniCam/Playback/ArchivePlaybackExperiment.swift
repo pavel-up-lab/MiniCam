@@ -5,9 +5,18 @@ enum ArchivePlaybackExperiment: String {
     case ffplayTCP = "ffplay-tcp"
     case ffplayUDP = "ffplay-udp"
     case foregroundOnly = "foreground-only"
+    case softwareDecoding = "software-decoding"
 
     var usesFFplay: Bool {
         self == .ffplayUDP || self == .ffplayTCP
+    }
+
+    var usesBackgroundPlayback: Bool {
+        self == .baseline || self == .softwareDecoding
+    }
+
+    func usesSoftwareDecoding(lowLatency: Bool) -> Bool {
+        self == .softwareDecoding && !lowLatency
     }
 
     static var current: ArchivePlaybackExperiment {

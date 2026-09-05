@@ -5,9 +5,11 @@ final class VLCPlaybackDiagnosticLogger: NSObject, VLCLogging {
     var level: VLCLogLevel = .debug
 
     private let diagnostics: PlaybackDiagnostics
+    private let source: String
 
-    init(diagnostics: PlaybackDiagnostics) {
+    init(diagnostics: PlaybackDiagnostics, source: String) {
         self.diagnostics = diagnostics
+        self.source = source
     }
 
     func handleMessage(
@@ -22,6 +24,7 @@ final class VLCPlaybackDiagnosticLogger: NSObject, VLCLogging {
                 "message": message,
                 "module": context?.module ?? "unknown",
                 "object": context.map { String($0.objectId) } ?? "unknown",
+                "source": source,
                 "type": context?.objectType ?? "unknown"
             ]
         )
@@ -31,7 +34,10 @@ final class VLCPlaybackDiagnosticLogger: NSObject, VLCLogging {
         diagnostics: PlaybackDiagnostics
     ) -> VLCPlaybackDiagnosticLogger? {
 #if DEBUG
-        let logger = VLCPlaybackDiagnosticLogger(diagnostics: diagnostics)
+        let logger = VLCPlaybackDiagnosticLogger(
+            diagnostics: diagnostics,
+            source: "shared"
+        )
         let library = VLCLibrary.shared()
         library.loggers = [logger]
         let bundle = Bundle(for: VLCMediaPlayer.self)
@@ -62,10 +68,14 @@ final class VLCPlaybackDiagnosticLogger: NSObject, VLCLogging {
 
     static func install(
         on library: VLCLibrary,
-        diagnostics: PlaybackDiagnostics
+        diagnostics: PlaybackDiagnostics,
+        source: String
     ) {
 #if DEBUG
-        library.loggers = [VLCPlaybackDiagnosticLogger(diagnostics: diagnostics)]
+        library.loggers = [VLCPlaybackDiagnosticLogger(
+            diagnostics: diagnostics,
+            source: source
+        )]
 #endif
     }
 }

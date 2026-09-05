@@ -294,7 +294,7 @@ final class AppContainer: ObservableObject {
         }
 
         await restorePlayback(after: restorePoint)
-        if let cameraClient, playbackExperiment == .baseline {
+        if let cameraClient, playbackExperiment.usesBackgroundPlayback {
             frameCacheRecorder.start(
                 client: cameraClient,
                 profile: profile,
@@ -475,7 +475,7 @@ final class AppContainer: ObservableObject {
             }
             connectionState = .connected(identity)
             isReady = true
-            if playbackExperiment == .baseline {
+            if playbackExperiment.usesBackgroundPlayback {
                 motionAnalyzer.start(at: analysisStart, credentials: credentials)
                 motionAnalyzer.enqueueNewArchive(from: recordingSegments)
             } else {
@@ -487,7 +487,7 @@ final class AppContainer: ObservableObject {
                 playLive()
             }
             startArchiveRefresh()
-            if playbackExperiment == .baseline {
+            if playbackExperiment.usesBackgroundPlayback {
                 frameCacheRecorder.start(
                     client: client,
                     profile: profile,

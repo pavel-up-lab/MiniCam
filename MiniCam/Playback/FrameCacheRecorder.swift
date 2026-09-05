@@ -48,7 +48,8 @@ final class FrameCacheRecorder: NSObject {
         library = VLCLibrary(options: options)
         VLCPlaybackDiagnosticLogger.install(
             on: library,
-            diagnostics: PlaybackDiagnostics.shared
+            diagnostics: PlaybackDiagnostics.shared,
+            source: "frameCache"
         )
         player = VLCMediaPlayer(library: library)
         super.init()
