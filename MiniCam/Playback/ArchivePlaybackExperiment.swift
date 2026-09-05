@@ -2,6 +2,7 @@ import Foundation
 
 enum ArchivePlaybackExperiment: String {
     case baseline
+    case defaultFramePolicy = "default-frame-policy"
     case ffplayTCP = "ffplay-tcp"
     case ffplayUDP = "ffplay-udp"
     case foregroundOnly = "foreground-only"
@@ -12,11 +13,15 @@ enum ArchivePlaybackExperiment: String {
     }
 
     var usesBackgroundPlayback: Bool {
-        self == .baseline || self == .softwareDecoding
+        self == .baseline || self == .defaultFramePolicy || self == .softwareDecoding
     }
 
     func usesSoftwareDecoding(lowLatency: Bool) -> Bool {
         self == .softwareDecoding && !lowLatency
+    }
+
+    func usesDefaultFramePolicy(lowLatency: Bool) -> Bool {
+        self == .defaultFramePolicy && !lowLatency
     }
 
     static var current: ArchivePlaybackExperiment {

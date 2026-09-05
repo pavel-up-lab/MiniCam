@@ -145,6 +145,19 @@ final class ArchivePlaybackExperimentTests: XCTestCase {
         XCTAssertTrue(experiment.usesBackgroundPlayback)
     }
 
+    func testDefaultFramePolicyAppliesOnlyToArchiveAndKeepsBackgroundBaseline() {
+        let experiment = ArchivePlaybackExperiment.resolve(
+            arguments: ["MiniCam", "--archive-playback-experiment=default-frame-policy"],
+            debugEnabled: true
+        )
+
+        XCTAssertEqual(experiment, .defaultFramePolicy)
+        XCTAssertTrue(experiment.usesDefaultFramePolicy(lowLatency: false))
+        XCTAssertFalse(experiment.usesDefaultFramePolicy(lowLatency: true))
+        XCTAssertFalse(experiment.usesSoftwareDecoding(lowLatency: false))
+        XCTAssertTrue(experiment.usesBackgroundPlayback)
+    }
+
     func testUnknownOrConflictingDebugExperimentsFallBackToBaseline() {
         let unknown = ArchivePlaybackExperiment.resolve(
             arguments: ["MiniCam", "--archive-playback-experiment=unknown"],

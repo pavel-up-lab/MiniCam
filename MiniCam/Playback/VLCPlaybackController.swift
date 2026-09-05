@@ -19,6 +19,7 @@ final class VLCPlaybackController: NSObject, ObservableObject {
 
     private var library: VLCLibrary
     private var player: VLCMediaPlayer
+    private var playerUsesDefaultFramePolicy: Bool
     private var playerUsesSoftwareDecoding: Bool
     private var profile: CameraProfile?
     private var credentials: CameraCredentials?
@@ -41,6 +42,7 @@ final class VLCPlaybackController: NSObject, ObservableObject {
         toleranceMilliseconds: 5
     )
     private var receivedTimeUpdateForTransition = false
+    private var desiredDefaultFramePolicy = false
     private var desiredSoftwareDecoding = false
     private let playbackExperiment = ArchivePlaybackExperiment.current
     private let ffplayDiagnostic = FFplayArchiveDiagnostic()
@@ -60,9 +62,13 @@ final class VLCPlaybackController: NSObject, ObservableObject {
     }
 
     override init() {
-        let instance = Self.makePlayer(softwareDecoding: false)
+        let instance = Self.makePlayer(
+            softwareDecoding: false,
+            defaultFramePolicy: false
+        )
         library = instance.library
         player = instance.player
+        playerUsesDefaultFramePolicy = false
         playerUsesSoftwareDecoding = false
         playerDiagnosticID = Self.makePlayerDiagnosticID()
         super.init()
@@ -220,7 +226,7 @@ final class VLCPlaybackController: NSObject, ObservableObject {
             return .udp
         case .ffplayTCP:
             return .tcp
-        case .baseline, .foregroundOnly, .softwareDecoding:
+        case .baseline, .defaultFramePolicy, .foregroundOnly, .softwareDecoding:
             return nil
         }
     }
@@ -297,6 +303,9 @@ final class VLCPlaybackController: NSObject, ObservableObject {
                 "decoder": playbackExperiment.usesSoftwareDecoding(lowLatency: lowLatency)
                     ? "software"
                     : "default",
+                "frame-policy": playbackExperiment.usesDefaultFramePolicy(lowLatency: lowLatency)
+                    ? "default"
+                    : "keep-late",
                 "stream": lowLatency ? "live" : "archive",
                 "transition": String(startedTransitionID),
                 "transport": lowLatency ? "tcp" : "udp"
@@ -311,7 +320,14 @@ final class VLCPlaybackController: NSObject, ObservableObject {
         desiredSoftwareDecoding = playbackExperiment.usesSoftwareDecoding(
             lowLatency: lowLatency
         )
-        if !hasLoadedMedia, playerUsesSoftwareDecoding != desiredSoftwareDecoding {
+        desiredDefaultFramePolicy = playbackExperiment.usesDefaultFramePolicy(
+            lowLatency: lowLatency
+        )
+        if
+            !hasLoadedMedia,
+            playerUsesSoftwareDecoding != desiredSoftwareDecoding
+                || playerUsesDefaultFramePolicy != desiredDefaultFramePolicy
+        {
             replacePlayer()
         }
 
@@ -405,18 +421,23 @@ final class VLCPlaybackController: NSObject, ObservableObject {
         start(request)
     }
 
-    private static func makePlayer(softwareDecoding: Bool) -> (
+    private static func makePlayer(
+        softwareDecoding: Bool,
+        defaultFramePolicy: Bool
+    ) -> (
         library: VLCLibrary,
         player: VLCMediaPlayer
     ) {
         var options = [
             "--no-video-title-show",
             "--no-snapshot-preview",
-            "--no-drop-late-frames",
-            "--no-skip-frames",
             "--network-caching=500",
             "--live-caching=500"
         ]
+        if !defaultFramePolicy {
+            options.append("--no-drop-late-frames")
+            options.append("--no-skip-frames")
+        }
         if softwareDecoding {
             options.append("--codec=avcodec,none")
             options.append("--avcodec-hw=none")
@@ -447,10 +468,12 @@ final class VLCPlaybackController: NSObject, ObservableObject {
             fields: ["player": previousPlayerID]
         )
         let instance = Self.makePlayer(
-            softwareDecoding: desiredSoftwareDecoding
+            softwareDecoding: desiredSoftwareDecoding,
+            defaultFramePolicy: desiredDefaultFramePolicy
         )
         library = instance.library
         player = instance.player
+        playerUsesDefaultFramePolicy = desiredDefaultFramePolicy
         playerUsesSoftwareDecoding = desiredSoftwareDecoding
         playerDiagnosticID = Self.makePlayerDiagnosticID()
         attachCurrentPlayer()
@@ -458,6 +481,7 @@ final class VLCPlaybackController: NSObject, ObservableObject {
             "playback.player-replaced",
             fields: [
                 "decoder": playerUsesSoftwareDecoding ? "software" : "default",
+                "frame-policy": playerUsesDefaultFramePolicy ? "default" : "keep-late",
                 "new": playerDiagnosticID,
                 "previous": previousPlayerID
             ]
