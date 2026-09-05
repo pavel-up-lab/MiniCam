@@ -481,7 +481,7 @@ final class AppContainer: ObservableObject {
             } else {
                 playbackDiagnostics.record("background-playback.disabled")
             }
-            if playbackExperiment == .ffplayUDP {
+            if playbackExperiment.usesFFplay {
                 playbackDiagnostics.record("foreground-playback.skipped")
             } else {
                 playLive()
@@ -546,7 +546,7 @@ final class AppContainer: ObservableObject {
     }
 
     func playLive() {
-        if playbackExperiment == .ffplayUDP {
+        if playbackExperiment.usesFFplay {
             playbackDiagnostics.record("foreground-playback.skipped")
             return
         }

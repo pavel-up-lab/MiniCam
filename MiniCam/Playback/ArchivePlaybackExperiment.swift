@@ -2,8 +2,13 @@ import Foundation
 
 enum ArchivePlaybackExperiment: String {
     case baseline
+    case ffplayTCP = "ffplay-tcp"
     case ffplayUDP = "ffplay-udp"
     case foregroundOnly = "foreground-only"
+
+    var usesFFplay: Bool {
+        self == .ffplayUDP || self == .ffplayTCP
+    }
 
     static var current: ArchivePlaybackExperiment {
         resolve(

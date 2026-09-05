@@ -123,6 +123,16 @@ final class ArchivePlaybackExperimentTests: XCTestCase {
         XCTAssertEqual(experiment, .ffplayUDP)
     }
 
+    func testResolvesFFplayTCPExperimentInDebug() {
+        let experiment = ArchivePlaybackExperiment.resolve(
+            arguments: ["MiniCam", "--archive-playback-experiment=ffplay-tcp"],
+            debugEnabled: true
+        )
+
+        XCTAssertEqual(experiment, .ffplayTCP)
+        XCTAssertTrue(experiment.usesFFplay)
+    }
+
     func testUnknownOrConflictingDebugExperimentsFallBackToBaseline() {
         let unknown = ArchivePlaybackExperiment.resolve(
             arguments: ["MiniCam", "--archive-playback-experiment=unknown"],
@@ -185,6 +195,7 @@ final class FFplayArchiveDiagnosticTests: XCTestCase {
         XCTAssertTrue(manifest.contains("camera%20user"))
         XCTAssertTrue(manifest.contains("secret%2Fpassword"))
         XCTAssertTrue(manifest.contains("option rtsp_transport udp"))
-        XCTAssertEqual(manifest.filter { $0 == "\n" }.count, 3)
+        XCTAssertTrue(manifest.contains("option allowed_media_types video"))
+        XCTAssertEqual(manifest.filter { $0 == "\n" }.count, 4)
     }
 }

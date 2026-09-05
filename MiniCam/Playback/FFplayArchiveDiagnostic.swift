@@ -124,7 +124,7 @@ final class FFplayArchiveDiagnostic: @unchecked Sendable {
                 "-x86_64",
                 ffplayURL.path,
                 "-hide_banner",
-                "-loglevel", "repeat+level+info",
+                "-loglevel", "repeat+level+debug",
                 "-protocol_whitelist", "file,rtsp,rtp,udp,tcp,http,https,tls,crypto",
                 "-f", "concat",
                 "-safe", "0",
@@ -150,7 +150,7 @@ final class FFplayArchiveDiagnostic: @unchecked Sendable {
         }
         let escapedURL = authenticatedURL.absoluteString
             .replacingOccurrences(of: "'", with: #"'\''"#)
-        return "ffconcat version 1.0\nfile '\(escapedURL)'\noption rtsp_transport \(transport.rawValue)\n"
+        return "ffconcat version 1.0\nfile '\(escapedURL)'\noption rtsp_transport \(transport.rawValue)\noption allowed_media_types video\n"
     }
 
     private func finish(process: Process, manifestURL: URL) {

@@ -105,11 +105,12 @@ final class VLCPlaybackController: NSObject, ObservableObject {
             return nil
         }
 
-        if playbackExperiment == .ffplayUDP {
+        if let transport = ffplayTransport {
             return playArchiveInFFplay(
                 sourceURL: url,
                 segment: segment,
-                date: date
+                date: date,
+                transport: transport
             )
         }
 
@@ -172,7 +173,8 @@ final class VLCPlaybackController: NSObject, ObservableObject {
     private func playArchiveInFFplay(
         sourceURL: URL,
         segment: RecordingSegment,
-        date: Date
+        date: Date,
+        transport: FFplayArchiveTransport
     ) -> Int? {
         guard let credentials else {
             state = .failed(.cameraUnavailable)
@@ -192,7 +194,7 @@ final class VLCPlaybackController: NSObject, ObservableObject {
                 try self.ffplayDiagnostic.start(
                     sourceURL: sourceURL,
                     credentials: credentials,
-                    transport: .udp
+                    transport: transport
                 )
                 self.activeSegment = segment
                 self.activePlaybackStart = date
@@ -207,6 +209,17 @@ final class VLCPlaybackController: NSObject, ObservableObject {
             }
         }
         return requestedTransitionID
+    }
+
+    private var ffplayTransport: FFplayArchiveTransport? {
+        switch playbackExperiment {
+        case .ffplayUDP:
+            return .udp
+        case .ffplayTCP:
+            return .tcp
+        case .baseline, .foregroundOnly:
+            return nil
+        }
     }
 
     func pause() {
