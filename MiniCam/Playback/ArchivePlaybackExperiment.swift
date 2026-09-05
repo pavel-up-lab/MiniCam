@@ -23,17 +23,42 @@ enum ArchivePlaybackExperiment: String {
     case ffplayUDP = "ffplay-udp"
     case foregroundOnly = "foreground-only"
     case softwareDecoding = "software-decoding"
+    case vlcTCP = "vlc-tcp"
+    case vlcTCPNoSkip = "vlc-tcp-no-skip"
 
     var usesFFplay: Bool {
         self == .ffplayUDP || self == .ffplayTCP
     }
 
     var usesBackgroundPlayback: Bool {
-        self == .baseline || self == .defaultFramePolicy || self == .softwareDecoding
+        self == .baseline
+            || self == .defaultFramePolicy
+            || self == .softwareDecoding
+            || self == .vlcTCP
+            || self == .vlcTCPNoSkip
     }
 
     func usesSoftwareDecoding(lowLatency: Bool) -> Bool {
         self == .softwareDecoding && !lowLatency
+    }
+
+    func usesTCPTransport(
+        lowLatency: Bool,
+        architecture: PlaybackArchitecture = .current
+    ) -> Bool {
+        lowLatency
+            || self == .vlcTCP
+            || self == .vlcTCPNoSkip
+            || (self == .baseline && architecture == .arm64)
+    }
+
+    func preventsFrameSkipping(
+        lowLatency: Bool,
+        architecture: PlaybackArchitecture = .current
+    ) -> Bool {
+        guard !lowLatency else { return false }
+        return self == .vlcTCPNoSkip
+            || (self == .baseline && architecture == .arm64)
     }
 
     func usesDefaultFramePolicy(
@@ -47,7 +72,10 @@ enum ArchivePlaybackExperiment: String {
         }
 
         return architecture == .arm64
-            && (self == .baseline || self == .foregroundOnly)
+            && (self == .baseline
+                || self == .foregroundOnly
+                || self == .vlcTCP
+                || self == .vlcTCPNoSkip)
     }
 
     static var current: ArchivePlaybackExperiment {

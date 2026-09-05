@@ -20,6 +20,7 @@ final class VLCPlaybackController: NSObject, ObservableObject {
     private var library: VLCLibrary
     private var player: VLCMediaPlayer
     private var playerUsesDefaultFramePolicy: Bool
+    private var playerPreventsFrameSkipping: Bool
     private var playerUsesSoftwareDecoding: Bool
     private var profile: CameraProfile?
     private var credentials: CameraCredentials?
@@ -43,6 +44,7 @@ final class VLCPlaybackController: NSObject, ObservableObject {
     )
     private var receivedTimeUpdateForTransition = false
     private var desiredDefaultFramePolicy = false
+    private var desiredPreventsFrameSkipping = false
     private var desiredSoftwareDecoding = false
     private let playbackExperiment = ArchivePlaybackExperiment.current
     private let ffplayDiagnostic = FFplayArchiveDiagnostic()
@@ -64,11 +66,13 @@ final class VLCPlaybackController: NSObject, ObservableObject {
     override init() {
         let instance = Self.makePlayer(
             softwareDecoding: false,
-            defaultFramePolicy: false
+            defaultFramePolicy: false,
+            preventsFrameSkipping: false
         )
         library = instance.library
         player = instance.player
         playerUsesDefaultFramePolicy = false
+        playerPreventsFrameSkipping = false
         playerUsesSoftwareDecoding = false
         playerDiagnosticID = Self.makePlayerDiagnosticID()
         super.init()
@@ -226,7 +230,8 @@ final class VLCPlaybackController: NSObject, ObservableObject {
             return .udp
         case .ffplayTCP:
             return .tcp
-        case .baseline, .defaultFramePolicy, .foregroundOnly, .softwareDecoding:
+        case .baseline, .defaultFramePolicy, .foregroundOnly, .softwareDecoding, .vlcTCP,
+             .vlcTCPNoSkip:
             return nil
         }
     }
@@ -304,11 +309,15 @@ final class VLCPlaybackController: NSObject, ObservableObject {
                     ? "software"
                     : "default",
                 "frame-policy": playbackExperiment.usesDefaultFramePolicy(lowLatency: lowLatency)
-                    ? "default"
+                    ? (playbackExperiment.preventsFrameSkipping(lowLatency: lowLatency)
+                        ? "no-skip"
+                        : "default")
                     : "keep-late",
                 "stream": lowLatency ? "live" : "archive",
                 "transition": String(startedTransitionID),
-                "transport": lowLatency ? "tcp" : "udp"
+                "transport": playbackExperiment.usesTCPTransport(lowLatency: lowLatency)
+                    ? "tcp"
+                    : "udp"
             ]
         )
         let request = PlaybackRequest(
@@ -323,10 +332,14 @@ final class VLCPlaybackController: NSObject, ObservableObject {
         desiredDefaultFramePolicy = playbackExperiment.usesDefaultFramePolicy(
             lowLatency: lowLatency
         )
+        desiredPreventsFrameSkipping = playbackExperiment.preventsFrameSkipping(
+            lowLatency: lowLatency
+        )
         if
             !hasLoadedMedia,
             playerUsesSoftwareDecoding != desiredSoftwareDecoding
                 || playerUsesDefaultFramePolicy != desiredDefaultFramePolicy
+                || playerPreventsFrameSkipping != desiredPreventsFrameSkipping
         {
             replacePlayer()
         }
@@ -353,7 +366,7 @@ final class VLCPlaybackController: NSObject, ObservableObject {
         activeSessionID = sessionID
         diagnostics.sessionOpened(id: sessionID, owner: .main)
         let media = VLCMedia(url: request.url)
-        if request.lowLatency {
+        if playbackExperiment.usesTCPTransport(lowLatency: request.lowLatency) {
             media.addOption(":rtsp-tcp")
         }
         media.addOption(request.lowLatency ? ":network-caching=500" : ":network-caching=750")
@@ -371,7 +384,9 @@ final class VLCPlaybackController: NSObject, ObservableObject {
                 "player": playerDiagnosticID,
                 "stream": request.lowLatency ? "live" : "archive",
                 "transition": String(request.transitionID),
-                "transport": request.lowLatency ? "tcp" : "udp"
+                "transport": playbackExperiment.usesTCPTransport(
+                    lowLatency: request.lowLatency
+                ) ? "tcp" : "udp"
             ]
         )
         player.play()
@@ -423,7 +438,8 @@ final class VLCPlaybackController: NSObject, ObservableObject {
 
     private static func makePlayer(
         softwareDecoding: Bool,
-        defaultFramePolicy: Bool
+        defaultFramePolicy: Bool,
+        preventsFrameSkipping: Bool
     ) -> (
         library: VLCLibrary,
         player: VLCMediaPlayer
@@ -436,6 +452,8 @@ final class VLCPlaybackController: NSObject, ObservableObject {
         ]
         if !defaultFramePolicy {
             options.append("--no-drop-late-frames")
+            options.append("--no-skip-frames")
+        } else if preventsFrameSkipping {
             options.append("--no-skip-frames")
         }
         if softwareDecoding {
@@ -469,11 +487,13 @@ final class VLCPlaybackController: NSObject, ObservableObject {
         )
         let instance = Self.makePlayer(
             softwareDecoding: desiredSoftwareDecoding,
-            defaultFramePolicy: desiredDefaultFramePolicy
+            defaultFramePolicy: desiredDefaultFramePolicy,
+            preventsFrameSkipping: desiredPreventsFrameSkipping
         )
         library = instance.library
         player = instance.player
         playerUsesDefaultFramePolicy = desiredDefaultFramePolicy
+        playerPreventsFrameSkipping = desiredPreventsFrameSkipping
         playerUsesSoftwareDecoding = desiredSoftwareDecoding
         playerDiagnosticID = Self.makePlayerDiagnosticID()
         attachCurrentPlayer()
@@ -481,7 +501,9 @@ final class VLCPlaybackController: NSObject, ObservableObject {
             "playback.player-replaced",
             fields: [
                 "decoder": playerUsesSoftwareDecoding ? "software" : "default",
-                "frame-policy": playerUsesDefaultFramePolicy ? "default" : "keep-late",
+                "frame-policy": playerUsesDefaultFramePolicy
+                    ? (playerPreventsFrameSkipping ? "no-skip" : "default")
+                    : "keep-late",
                 "new": playerDiagnosticID,
                 "previous": previousPlayerID
             ]

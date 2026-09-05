@@ -146,6 +146,65 @@ final class ArchivePlaybackExperimentTests: XCTestCase {
         XCTAssertTrue(experiment.usesFFplay)
     }
 
+    func testVLCTCPExperimentChangesOnlyArchiveTransport() {
+        let experiment = ArchivePlaybackExperiment.resolve(
+            arguments: ["MiniCam", "--archive-playback-experiment=vlc-tcp"],
+            debugEnabled: true
+        )
+
+        XCTAssertEqual(experiment, .vlcTCP)
+        XCTAssertTrue(experiment.usesTCPTransport(lowLatency: false))
+        XCTAssertTrue(experiment.usesTCPTransport(lowLatency: true))
+        XCTAssertTrue(experiment.usesBackgroundPlayback)
+        XCTAssertFalse(experiment.usesSoftwareDecoding(lowLatency: false))
+        XCTAssertTrue(
+            experiment.usesDefaultFramePolicy(
+                lowLatency: false,
+                architecture: .arm64
+            )
+        )
+    }
+
+    func testVLCTCPNoSkipExperimentAddsOnlyArchiveNoSkipPolicy() {
+        let experiment = ArchivePlaybackExperiment.resolve(
+            arguments: ["MiniCam", "--archive-playback-experiment=vlc-tcp-no-skip"],
+            debugEnabled: true
+        )
+
+        XCTAssertEqual(experiment, .vlcTCPNoSkip)
+        XCTAssertTrue(experiment.usesTCPTransport(lowLatency: false))
+        XCTAssertTrue(
+            experiment.usesDefaultFramePolicy(
+                lowLatency: false,
+                architecture: .arm64
+            )
+        )
+        XCTAssertTrue(experiment.preventsFrameSkipping(lowLatency: false))
+        XCTAssertFalse(experiment.preventsFrameSkipping(lowLatency: true))
+        XCTAssertTrue(experiment.usesBackgroundPlayback)
+    }
+
+    func testBaselineUsesArchiveTCPOnlyOnAppleSiliconAndLiveTCPEverywhere() {
+        XCTAssertTrue(
+            ArchivePlaybackExperiment.baseline.usesTCPTransport(
+                lowLatency: false,
+                architecture: .arm64
+            )
+        )
+        XCTAssertFalse(
+            ArchivePlaybackExperiment.baseline.usesTCPTransport(
+                lowLatency: false,
+                architecture: .x86_64
+            )
+        )
+        XCTAssertTrue(
+            ArchivePlaybackExperiment.baseline.usesTCPTransport(
+                lowLatency: true,
+                architecture: .x86_64
+            )
+        )
+    }
+
     func testSoftwareDecodingAppliesOnlyToArchiveAndKeepsBackgroundBaseline() {
         let experiment = ArchivePlaybackExperiment.resolve(
             arguments: ["MiniCam", "--archive-playback-experiment=software-decoding"],
@@ -200,6 +259,18 @@ final class ArchivePlaybackExperimentTests: XCTestCase {
             experiment.usesDefaultFramePolicy(
                 lowLatency: false,
                 architecture: .other
+            )
+        )
+        XCTAssertTrue(
+            experiment.preventsFrameSkipping(
+                lowLatency: false,
+                architecture: .arm64
+            )
+        )
+        XCTAssertFalse(
+            experiment.preventsFrameSkipping(
+                lowLatency: false,
+                architecture: .x86_64
             )
         )
     }
