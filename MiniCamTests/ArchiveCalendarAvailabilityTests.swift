@@ -88,3 +88,49 @@ final class ArchiveCalendarAvailabilityTests: XCTestCase {
         )
     }
 }
+
+final class RussianDateFormattingTests: XCTestCase {
+    private let utc = TimeZone(secondsFromGMT: 0)!
+
+    func testUsesRussianMonthAndTwentyFourHourTime() {
+        let date = makeDate()
+
+        XCTAssertEqual(
+            RussianDateFormatting.dateAndTime(date, timeZone: utc),
+            "5 сент. 2026, 13:07:09"
+        )
+        XCTAssertEqual(
+            RussianDateFormatting.shortTime(date, timeZone: utc),
+            "13:07"
+        )
+    }
+
+    func testUsesStandaloneRussianMonthInCalendarHeader() {
+        XCTAssertEqual(
+            RussianDateFormatting.monthAndYear(makeDate(), timeZone: utc),
+            "сентябрь 2026"
+        )
+    }
+
+    func testCalendarStartsOnMondayWithRussianWeekdayNames() {
+        let calendar = RussianDateFormatting.calendar
+        let symbols = calendar.shortStandaloneWeekdaySymbols
+        let mondayIndex = calendar.firstWeekday - 1
+
+        XCTAssertEqual(calendar.firstWeekday, 2)
+        XCTAssertEqual(symbols[mondayIndex].lowercased(), "пн")
+    }
+
+    private func makeDate() -> Date {
+        var components = DateComponents()
+        components.calendar = Calendar(identifier: .gregorian)
+        components.timeZone = utc
+        components.year = 2026
+        components.month = 9
+        components.day = 5
+        components.hour = 13
+        components.minute = 7
+        components.second = 9
+        return components.date!
+    }
+}

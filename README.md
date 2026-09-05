@@ -17,6 +17,7 @@ MiniCam is a native macOS viewer for a single Hikvision-compatible IP camera. It
 - PNG snapshots of the displayed live or archive frame.
 - MP4 export of a continuous archive interval up to 30 minutes.
 - Configurable local or external storage for cached frames.
+- Adjustable player interface text at `1×`, `1.5×`, or `2×` scale.
 - No camera cloud account, separate recording server, telemetry, or subscription.
 
 All camera credentials remain on the Mac. The password is stored in macOS Keychain.
@@ -33,8 +34,8 @@ Tested hardware: **Hikvision DS-2CD2043G2-IU**, channel 1, continuous microSD re
 
 ## Download and install
 
-1. Open the [`v0.1.0-beta.1` release](https://github.com/pavel-up-lab/MiniCam/releases/tag/v0.1.0-beta.1).
-2. Download `MiniCam-0.1.0-beta.1-macos-universal.zip` and optionally verify it with `SHA256SUMS.txt`.
+1. Open the [`v0.1.0-beta.2` release](https://github.com/pavel-up-lab/MiniCam/releases/tag/v0.1.0-beta.2).
+2. Download `MiniCam-0.1.0-beta.2-macos-universal.zip` and optionally verify it with `SHA256SUMS.txt`.
 3. Unzip the download and move `MiniCam.app` to the Applications folder.
 4. Open MiniCam.
 

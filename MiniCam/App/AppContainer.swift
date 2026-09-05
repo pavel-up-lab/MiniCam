@@ -17,6 +17,7 @@ final class AppContainer: ObservableObject {
     @Published private(set) var isReady = false
     @Published private(set) var isTransportBusy = false
     @Published private(set) var appSettings: AppSettings
+    @Published private(set) var interfaceFontScale: InterfaceFontScale
     @Published private(set) var storageStatus: StorageStatus = .internalStorage
     @Published private(set) var isApplyingSettings = false
     @Published private(set) var currentExternalFolderURL: URL?
@@ -77,6 +78,7 @@ final class AppContainer: ObservableObject {
         self.storageCoordinator = storageCoordinator
         self.settingsStore = settingsStore
         appSettings = settings
+        interfaceFontScale = settings.interfaceFontScale
         screenshotFolderURL = desktopURL
         archivePreviewController = ArchivePreviewController(store: frameCacheStore)
         frameCacheRecorder = FrameCacheRecorder(store: frameCacheStore)
@@ -148,6 +150,7 @@ final class AppContainer: ObservableObject {
 
     func applySettings(
         motionTrackingEnabled: Bool,
+        interfaceFontScale: InterfaceFontScale,
         motionEventRecordingMode: MotionEventRecordingMode,
         motionEventRetention: MotionEventRetention,
         externalFolderURL: URL?,
@@ -189,6 +192,7 @@ final class AppContainer: ObservableObject {
         applyScreenshotFolder(screenshotFolderURL)
         let newSettings = AppSettings(
             isMotionTrackingEnabled: motionTrackingEnabled,
+            interfaceFontScale: interfaceFontScale,
             motionEventRecordingMode: motionEventRecordingMode,
             motionEventRetention: motionEventRetention,
             lastMotionEventCleanupAt: appSettings.lastMotionEventCleanupAt,
@@ -200,8 +204,17 @@ final class AppContainer: ObservableObject {
 
         try settingsStore.save(newSettings)
         appSettings = newSettings
+        self.interfaceFontScale = interfaceFontScale
         motionAnalyzer.setMotionTrackingEnabled(motionTrackingEnabled)
         motionAnalyzer.setMotionEventRecordingMode(motionEventRecordingMode)
+    }
+
+    func previewInterfaceFontScale(_ scale: InterfaceFontScale) {
+        interfaceFontScale = scale
+    }
+
+    func cancelInterfaceFontScalePreview() {
+        interfaceFontScale = appSettings.interfaceFontScale
     }
 
     func clearMotionEventHistory() async throws {

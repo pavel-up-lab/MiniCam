@@ -15,6 +15,7 @@ final class AppSettingsStoreTests: XCTestCase {
 
         let expected = AppSettings(
             isMotionTrackingEnabled: false,
+            interfaceFontScale: .extraLarge,
             motionEventRecordingMode: .peopleOnly,
             motionEventRetention: .sevenDays,
             lastMotionEventCleanupAt: now,
@@ -26,6 +27,7 @@ final class AppSettingsStoreTests: XCTestCase {
         try store.save(expected)
 
         XCTAssertEqual(store.load(referenceDate: now.addingTimeInterval(60)), expected)
+        XCTAssertEqual(expected.interfaceFontScale.multiplier, 2)
     }
 
     func testLoadsSettingsSavedBeforeScreenshotFolderWasAdded() throws {
@@ -40,6 +42,9 @@ final class AppSettingsStoreTests: XCTestCase {
         let migrationDate = Date(timeIntervalSince1970: 2_000_000)
 
         let loaded = store.load(referenceDate: migrationDate)
+
+        XCTAssertEqual(loaded.interfaceFontScale, .normal)
+        XCTAssertEqual(InterfaceFontScale.allCases.map(\.multiplier), [1, 1.5, 2])
 
         XCTAssertEqual(
             loaded,
@@ -58,5 +63,21 @@ final class AppSettingsStoreTests: XCTestCase {
             store.load(referenceDate: migrationDate.addingTimeInterval(86_400)),
             loaded
         )
+    }
+
+    func testMigratesFirstFontScaleImplementationToNewLevels() throws {
+        let decoder = JSONDecoder()
+
+        let formerDouble = try decoder.decode(
+            AppSettings.self,
+            from: Data(#"{"isMotionTrackingEnabled":true,"interfaceFontScale":2}"#.utf8)
+        )
+        let formerTriple = try decoder.decode(
+            AppSettings.self,
+            from: Data(#"{"isMotionTrackingEnabled":true,"interfaceFontScale":3}"#.utf8)
+        )
+
+        XCTAssertEqual(formerDouble.interfaceFontScale, .large)
+        XCTAssertEqual(formerTriple.interfaceFontScale, .extraLarge)
     }
 }

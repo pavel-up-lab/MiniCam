@@ -1,6 +1,8 @@
 import SwiftUI
 
 struct ArchiveTimelineView: View {
+    @Environment(\.appFontScale) private var fontScale
+
     @Binding var selectedDate: Date
     @Binding var isInteracting: Bool
     @Binding var clipStart: Date?
@@ -29,18 +31,18 @@ struct ArchiveTimelineView: View {
             if isExpanded {
                 VStack(spacing: 8) {
                     VStack(spacing: 3) {
-                        Text(selectedDate.formatted(date: .abbreviated, time: .standard))
-                            .font(.system(size: 11, weight: .bold, design: .monospaced))
+                        Text(RussianDateFormatting.dateAndTime(selectedDate))
+                            .appFont(size: 11, weight: .bold, design: .monospaced)
                             .foregroundStyle(accent)
 
                         Text("≈ ближайший ключевой кадр")
-                            .font(.system(size: 9, weight: .medium, design: .monospaced))
+                            .appFont(size: 9, weight: .medium, design: .monospaced)
                             .foregroundStyle(.white.opacity(0.48))
                             .opacity(isInteracting ? 1 : 0)
                     }
 
                     detailTimeline
-                        .frame(height: 54)
+                        .frame(height: 54 + ((fontScale - 1) * 18))
 
                     overviewTimeline
                 }
@@ -69,7 +71,7 @@ struct ArchiveTimelineView: View {
         }
         .allowsHitTesting(false)
         .accessibilityLabel("Положение в архиве")
-        .accessibilityValue(selectedDate.formatted(date: .abbreviated, time: .standard))
+        .accessibilityValue(RussianDateFormatting.dateAndTime(selectedDate))
     }
 
     private var detailTimeline: some View {
@@ -96,7 +98,7 @@ struct ArchiveTimelineView: View {
             .contentShape(Rectangle())
             .gesture(detailDrag)
             .accessibilityLabel("Точная шкала архива")
-            .accessibilityValue(selectedDate.formatted(date: .abbreviated, time: .standard))
+            .accessibilityValue(RussianDateFormatting.dateAndTime(selectedDate))
         }
     }
 
@@ -127,14 +129,14 @@ struct ArchiveTimelineView: View {
                 .allowsHitTesting(false)
 
             Text(Self.durationText(end.timeIntervalSince(start)))
-                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                .appFont(size: 9, weight: .bold, design: .monospaced)
                 .foregroundStyle(.white)
                 .padding(.horizontal, 6)
-                .frame(height: 18)
+                .frame(minHeight: 18 * fontScale)
                 .background(Color.black.opacity(0.76), in: Capsule())
                 .position(
                     x: centerX + max(24, width / 2),
-                    y: 10
+                    y: 10 * fontScale
                 )
                 .allowsHitTesting(false)
         }
@@ -184,13 +186,13 @@ struct ArchiveTimelineView: View {
             .tint(accent.opacity(0.72))
 
             HStack {
-                Text(range.lowerBound.formatted(date: .abbreviated, time: .shortened))
+                Text(RussianDateFormatting.dateAndShortTime(range.lowerBound))
                 Spacer()
                 Text("ОБЗОР АРХИВА")
                 Spacer()
                 Text("СЕЙЧАС")
             }
-            .font(.system(size: 9, weight: .semibold, design: .monospaced))
+            .appFont(size: 9, weight: .semibold, design: .monospaced)
             .foregroundStyle(.white.opacity(0.42))
         }
     }
@@ -274,10 +276,10 @@ struct ArchiveTimelineView: View {
 
             if isMinute {
                 let date = Date(timeIntervalSince1970: tick)
-                let label = Text(date.formatted(date: .omitted, time: .shortened))
-                    .font(.system(size: 8, weight: .medium, design: .monospaced))
+                let label = Text(RussianDateFormatting.shortTime(date))
+                    .font(.system(size: 8 * fontScale, weight: .medium, design: .monospaced))
                     .foregroundColor(.white.opacity(0.48))
-                context.draw(label, at: CGPoint(x: x, y: 9))
+                context.draw(label, at: CGPoint(x: x, y: 9 * fontScale))
             }
             tick += 10
         }

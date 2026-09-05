@@ -2,6 +2,7 @@ import SwiftUI
 
 struct CameraPlayerView: View {
     @EnvironmentObject private var container: AppContainer
+    @Environment(\.appFontScale) private var fontScale
     @ObservedObject var playback: VLCPlaybackController
     @ObservedObject var preview: ArchivePreviewController
 
@@ -156,7 +157,9 @@ struct CameraPlayerView: View {
     }
 
     private var motionPanelBottomPadding: CGFloat {
-        let timelinePadding: CGFloat = isTimelineExpanded ? 150 : 70
+        let timelinePadding: CGFloat = isTimelineExpanded
+            ? 150 + ((fontScale - 1) * 55)
+            : 70 + ((fontScale - 1) * 18)
         return timelinePadding + (isMotionPanelExpanded ? 50 : 0)
     }
 
@@ -169,12 +172,15 @@ struct CameraPlayerView: View {
             }
 
             if let screenshotNotice {
-                Label(screenshotNotice.message, systemImage: screenshotNotice.symbol)
-                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                HStack(spacing: 6) {
+                    Image(systemName: screenshotNotice.symbol)
+                    Text(screenshotNotice.message)
+                        .appFont(size: 10, weight: .semibold, design: .monospaced)
+                }
                     .foregroundStyle(screenshotNotice.isError ? Color.white : Color.black)
-                    .lineLimit(1)
+                    .fixedSize(horizontal: false, vertical: true)
                     .padding(.horizontal, 10)
-                    .frame(height: 30)
+                    .frame(minHeight: 30)
                     .background(
                         screenshotNotice.isError
                             ? Color(red: 0.85, green: 0.27, blue: 0.22)
@@ -423,20 +429,34 @@ struct CameraPlayerView: View {
                     .fill(isLive ? Color.red : Color(red: 0.73, green: 0.95, blue: 0.18))
                     .frame(width: 8, height: 8)
 
-                Text(isLive ? "ПРЯМОЙ ЭФИР" : formatted(selectedDate))
-                    .font(.system(size: 12, weight: .bold, design: .monospaced))
+                Text(isLive ? "ПРЯМОЙ ЭФИР" : RussianDateFormatting.dateAndTime(selectedDate))
+                    .appFont(size: 12, weight: .bold, design: .monospaced)
                     .foregroundStyle(.white)
 
                 Spacer()
 
-                Button("В эфир") {
+                Button {
                     clearClipSelection()
                     beginPreviewTransitionIfNeeded()
                     container.playLive()
+                } label: {
+                    Text("В эфир")
+                        .appFont(size: 13, weight: .semibold)
+                        .foregroundStyle(Color(red: 0.06, green: 0.08, blue: 0.02))
+                        .padding(.horizontal, 11 * fontScale)
+                        .frame(minHeight: 28 * fontScale)
+                        .background(
+                            Color(red: 0.62, green: 0.82, blue: 0.12),
+                            in: RoundedRectangle(
+                                cornerRadius: 6 * fontScale,
+                                style: .continuous
+                            )
+                        )
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(Color(red: 0.62, green: 0.82, blue: 0.12))
+                .buttonStyle(.plain)
                 .disabled(isLive)
+                .opacity(isLive ? 0.42 : 1)
+                .accessibilityLabel("Вернуться в прямой эфир")
 
                 Button {
                     withAnimation(.easeInOut(duration: 0.18)) {
@@ -444,12 +464,12 @@ struct CameraPlayerView: View {
                     }
                 } label: {
                     Image(systemName: isTimelineExpanded ? "chevron.down" : "chevron.up")
-                        .font(.system(size: 12, weight: .bold))
-                        .frame(width: 44, height: 44)
+                        .font(.system(size: 12 * fontScale, weight: .bold))
+                        .frame(width: 44 * fontScale, height: 44 * fontScale)
                         .contentShape(Rectangle())
                         .foregroundStyle(Color(red: 0.73, green: 0.95, blue: 0.18))
                 }
-                .padding(-10)
+                .padding(-10 * fontScale)
                 .buttonStyle(.plain)
                 .help(isTimelineExpanded ? "Свернуть таймлайн" : "Развернуть таймлайн")
                 .accessibilityLabel(isTimelineExpanded ? "Свернуть таймлайн" : "Развернуть таймлайн")
@@ -510,10 +530,10 @@ struct CameraPlayerView: View {
 
                 if let date = preview.imageDate {
                     VStack(spacing: 3) {
-                        Text(date.formatted(date: .abbreviated, time: .standard))
-                            .font(.system(size: 12, weight: .bold, design: .monospaced))
+                        Text(RussianDateFormatting.dateAndTime(date))
+                            .appFont(size: 12, weight: .bold, design: .monospaced)
                         Text("кадр из локального кэша")
-                            .font(.system(size: 9, weight: .medium, design: .monospaced))
+                            .appFont(size: 9, weight: .medium, design: .monospaced)
                     }
                     .foregroundStyle(.white)
                     .padding(.horizontal, 10)
@@ -532,15 +552,15 @@ struct CameraPlayerView: View {
 
                 VStack(spacing: 8) {
                     if let date = preview.requestedDate {
-                        Text(date.formatted(date: .abbreviated, time: .standard))
-                            .font(.system(size: 15, weight: .bold, design: .monospaced))
+                        Text(RussianDateFormatting.dateAndTime(date))
+                            .appFont(size: 15, weight: .bold, design: .monospaced)
                     }
 
                     Text("КАДР ЕЩЁ НЕ НАКОПЛЕН")
-                        .font(.system(size: 12, weight: .bold, design: .monospaced))
+                        .appFont(size: 12, weight: .bold, design: .monospaced)
 
                     Text("Отпустите таймлайн для перехода")
-                        .font(.system(size: 10, weight: .medium, design: .monospaced))
+                        .appFont(size: 10, weight: .medium, design: .monospaced)
                         .foregroundStyle(.white.opacity(0.72))
                 }
                 .multilineTextAlignment(.center)
@@ -607,10 +627,6 @@ struct CameraPlayerView: View {
         case .loading, .failed:
             return false
         }
-    }
-
-    private func formatted(_ date: Date) -> String {
-        date.formatted(date: .abbreviated, time: .standard)
     }
 
     private func clearClipSelection() {

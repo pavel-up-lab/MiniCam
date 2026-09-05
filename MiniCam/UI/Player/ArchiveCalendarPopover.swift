@@ -1,6 +1,8 @@
 import SwiftUI
 
 struct ArchiveCalendarPopover: View {
+    @Environment(\.appFontScale) private var fontScale
+
     let segments: [RecordingSegment]
     let initialDate: Date
     let onCommit: (Date) -> Void
@@ -10,7 +12,7 @@ struct ArchiveCalendarPopover: View {
     @State private var selectedHour: Int
     @State private var selectedMinute: Int
 
-    private let calendar = Calendar.autoupdatingCurrent
+    private let calendar = RussianDateFormatting.calendar
     private let accent = Color(red: 0.73, green: 0.95, blue: 0.18)
     private let columns = Array(
         repeating: GridItem(.flexible(), spacing: 4),
@@ -30,7 +32,7 @@ struct ArchiveCalendarPopover: View {
         self.initialDate = initialDate
         self.onCommit = onCommit
 
-        let calendar = Calendar.autoupdatingCurrent
+        let calendar = RussianDateFormatting.calendar
         let month = calendar.dateInterval(of: .month, for: initialDate)?.start
             ?? initialDate
         _displayedMonth = State(initialValue: month)
@@ -46,7 +48,7 @@ struct ArchiveCalendarPopover: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("ПЕРЕЙТИ В АРХИВ")
-                .font(.system(size: 12, weight: .bold, design: .monospaced))
+                .appFont(size: 12, weight: .bold, design: .monospaced)
                 .foregroundStyle(.white)
 
             monthHeader
@@ -57,14 +59,14 @@ struct ArchiveCalendarPopover: View {
                 .overlay(Color.white.opacity(0.12))
 
             Text("ЧАС")
-                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                .appFont(size: 10, weight: .bold, design: .monospaced)
                 .foregroundStyle(.white.opacity(0.62))
 
             hourGrid
             timeRow
         }
         .padding(16)
-        .frame(width: 340)
+        .frame(width: 340 + ((fontScale - 1) * 170))
         .background(Color(red: 0.055, green: 0.065, blue: 0.071))
         .onAppear(perform: normalizeSelection)
         .onChange(of: segments) { _ in
@@ -86,8 +88,8 @@ struct ArchiveCalendarPopover: View {
 
             Spacer()
 
-            Text(displayedMonth.formatted(.dateTime.month(.wide).year()))
-                .font(.system(size: 13, weight: .semibold))
+            Text(RussianDateFormatting.monthAndYear(displayedMonth))
+                .appFont(size: 13, weight: .semibold)
                 .foregroundStyle(.white)
 
             Spacer()
@@ -109,7 +111,7 @@ struct ArchiveCalendarPopover: View {
         LazyVGrid(columns: columns, spacing: 4) {
             ForEach(weekdaySymbols, id: \.self) { symbol in
                 Text(symbol.uppercased())
-                    .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                    .appFont(size: 9, weight: .semibold, design: .monospaced)
                     .foregroundStyle(.white.opacity(0.42))
                     .frame(maxWidth: .infinity)
             }
@@ -138,8 +140,8 @@ struct ArchiveCalendarPopover: View {
             chooseNearestAvailableHour()
         } label: {
             Text(String(calendar.component(.day, from: day)))
-                .font(.system(size: 11, weight: isSelected ? .bold : .medium))
-                .frame(maxWidth: .infinity, minHeight: 32)
+                .appFont(size: 11, weight: isSelected ? .bold : .medium)
+                .frame(maxWidth: .infinity, minHeight: max(32, 15 * fontScale + 10))
                 .foregroundStyle(isSelected ? Color.black : Color.white)
                 .background(
                     isSelected ? accent : Color.white.opacity(isAvailable ? 0.08 : 0.025),
@@ -149,7 +151,7 @@ struct ArchiveCalendarPopover: View {
         .buttonStyle(.plain)
         .disabled(!isAvailable)
         .opacity(isAvailable ? 1 : 0.34)
-        .accessibilityLabel(day.formatted(date: .complete, time: .omitted))
+        .accessibilityLabel(RussianDateFormatting.completeDate(day))
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
@@ -163,8 +165,8 @@ struct ArchiveCalendarPopover: View {
                     selectedHour = hour
                 } label: {
                     Text(String(format: "%02d", hour))
-                        .font(.system(size: 10, weight: isSelected ? .bold : .medium, design: .monospaced))
-                        .frame(maxWidth: .infinity, minHeight: 28)
+                        .appFont(size: 10, weight: isSelected ? .bold : .medium, design: .monospaced)
+                        .frame(maxWidth: .infinity, minHeight: max(28, 14 * fontScale + 8))
                         .foregroundStyle(isSelected ? Color.black : Color.white)
                         .background(
                             isSelected ? accent : Color.white.opacity(isAvailable ? 0.08 : 0.025),
@@ -183,16 +185,18 @@ struct ArchiveCalendarPopover: View {
     private var timeRow: some View {
         HStack(spacing: 10) {
             Text(String(format: "%02d:", selectedHour))
-                .font(.system(size: 18, weight: .bold, design: .monospaced))
+                .appFont(size: 18, weight: .bold, design: .monospaced)
                 .foregroundStyle(.white)
 
             Picker("Минуты", selection: $selectedMinute) {
                 ForEach(0..<60, id: \.self) { minute in
-                    Text(String(format: "%02d", minute)).tag(minute)
+                    Text(String(format: "%02d", minute))
+                        .appFont(size: 11, weight: .medium, design: .monospaced)
+                        .tag(minute)
                 }
             }
             .labelsHidden()
-            .frame(width: 72)
+            .frame(width: 72 * fontScale)
             .accessibilityLabel("Минуты")
 
             Spacer()
@@ -202,6 +206,7 @@ struct ArchiveCalendarPopover: View {
                     onCommit(commitDate)
                 }
             }
+            .appFont(size: 13, weight: .semibold)
             .buttonStyle(.borderedProminent)
             .tint(Color(red: 0.62, green: 0.82, blue: 0.12))
             .disabled(commitDate == nil)
@@ -247,7 +252,7 @@ struct ArchiveCalendarPopover: View {
     }
 
     private var weekdaySymbols: [String] {
-        let symbols = calendar.veryShortStandaloneWeekdaySymbols
+        let symbols = calendar.shortStandaloneWeekdaySymbols
         let startIndex = max(0, calendar.firstWeekday - 1)
         return Array(symbols[startIndex...] + symbols[..<startIndex])
     }
@@ -324,5 +329,65 @@ struct ArchiveCalendarPopover: View {
             return
         }
         selectedHour = nearest
+    }
+}
+
+enum RussianDateFormatting {
+    static var calendar: Calendar {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.locale = locale
+        calendar.timeZone = .autoupdatingCurrent
+        calendar.firstWeekday = 2
+        return calendar
+    }
+
+    static func monthAndYear(
+        _ date: Date,
+        timeZone: TimeZone = .autoupdatingCurrent
+    ) -> String {
+        string(from: date, format: "LLLL yyyy", timeZone: timeZone)
+    }
+
+    static func completeDate(
+        _ date: Date,
+        timeZone: TimeZone = .autoupdatingCurrent
+    ) -> String {
+        string(from: date, format: "EEEE, d MMMM yyyy", timeZone: timeZone)
+    }
+
+    static func dateAndTime(
+        _ date: Date,
+        timeZone: TimeZone = .autoupdatingCurrent
+    ) -> String {
+        string(from: date, format: "d MMM yyyy, HH:mm:ss", timeZone: timeZone)
+    }
+
+    static func dateAndShortTime(
+        _ date: Date,
+        timeZone: TimeZone = .autoupdatingCurrent
+    ) -> String {
+        string(from: date, format: "d MMM yyyy, HH:mm", timeZone: timeZone)
+    }
+
+    static func shortTime(
+        _ date: Date,
+        timeZone: TimeZone = .autoupdatingCurrent
+    ) -> String {
+        string(from: date, format: "HH:mm", timeZone: timeZone)
+    }
+
+    private static let locale = Locale(identifier: "ru_RU")
+
+    private static func string(
+        from date: Date,
+        format: String,
+        timeZone: TimeZone
+    ) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = locale
+        formatter.calendar = calendar
+        formatter.timeZone = timeZone
+        formatter.dateFormat = format
+        return formatter.string(from: date)
     }
 }

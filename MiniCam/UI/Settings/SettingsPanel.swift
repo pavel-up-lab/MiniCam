@@ -3,11 +3,13 @@ import SwiftUI
 
 struct SettingsPanel: View {
     @EnvironmentObject private var container: AppContainer
+    @Environment(\.appFontScale) private var fontScale
 
     let onCancel: () -> Void
     let onSaved: () -> Void
 
     @State private var isMotionTrackingEnabled = true
+    @State private var interfaceFontScale: InterfaceFontScale = .normal
     @State private var motionEventRecordingMode: MotionEventRecordingMode = .peopleAndVehicles
     @State private var motionEventRetention: MotionEventRetention = .threeDays
     @State private var externalFolderURL: URL?
@@ -20,29 +22,36 @@ struct SettingsPanel: View {
     private let panelBackground = Color(red: 0.055, green: 0.065, blue: 0.071)
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            header
-            eventSettingsSection
-            storageSection
-            screenshotSection
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 16) {
+                header
+                interfaceSection
+                eventSettingsSection
+                storageSection
+                screenshotSection
 
-            if let errorMessage {
-                Text(errorMessage)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(Color(red: 1.0, green: 0.47, blue: 0.39))
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+                if let errorMessage {
+                    Text(errorMessage)
+                        .appFont(size: 11, weight: .medium)
+                        .foregroundStyle(Color(red: 1.0, green: 0.47, blue: 0.39))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
 
-            if let successMessage {
-                Label(successMessage, systemImage: "checkmark.circle.fill")
-                    .font(.system(size: 11, weight: .semibold))
+                if let successMessage {
+                    HStack(spacing: 6) {
+                        Image(systemName: "checkmark.circle.fill")
+                        Text(successMessage)
+                            .appFont(size: 11, weight: .semibold)
+                    }
                     .foregroundStyle(accent)
-            }
+                }
 
-            actionRow
+                actionRow
+            }
+            .padding(20)
         }
-        .padding(20)
-        .frame(width: 430)
+        .frame(width: panelWidth)
+        .frame(maxHeight: 560)
         .foregroundStyle(.white)
         .background(panelBackground)
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
@@ -57,21 +66,31 @@ struct SettingsPanel: View {
         }
         .shadow(color: .black.opacity(0.62), radius: 30, y: 16)
         .onAppear(perform: loadDraft)
+        .onDisappear {
+            container.cancelInterfaceFontScalePreview()
+        }
         .onExitCommand {
             guard !isSettingsBusy else { return }
-            onCancel()
+            cancel()
         }
+    }
+
+    private var panelWidth: CGFloat {
+        430 + ((fontScale - 1) * 140)
     }
 
     private var header: some View {
         HStack {
-            Label("Настройки", systemImage: "gearshape.fill")
-                .font(.system(size: 17, weight: .bold))
+            HStack(spacing: 8) {
+                Image(systemName: "gearshape.fill")
+                Text("Настройки")
+                    .appFont(size: 17, weight: .bold)
+            }
                 .foregroundStyle(accent)
 
             Spacer()
 
-            Button(action: onCancel) {
+            Button(action: cancel) {
                 Image(systemName: "xmark")
                     .font(.system(size: 11, weight: .bold))
                     .frame(width: 28, height: 28)
@@ -86,18 +105,85 @@ struct SettingsPanel: View {
         }
     }
 
+    private var interfaceSection: some View {
+        VStack(alignment: .leading, spacing: 11) {
+            Text("ИНТЕРФЕЙС")
+                .appFont(size: 10, weight: .bold, design: .monospaced)
+                .foregroundStyle(.white.opacity(0.54))
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Размер шрифта")
+                    .appFont(size: 12, weight: .semibold)
+
+                HStack(spacing: 4) {
+                    ForEach(InterfaceFontScale.allCases, id: \.self) { scale in
+                        Button {
+                            interfaceFontScale = scale
+                            container.previewInterfaceFontScale(scale)
+                        } label: {
+                            Text(scale.title)
+                                .appFont(size: 11, weight: .bold)
+                                .foregroundStyle(
+                                    interfaceFontScale == scale
+                                        ? Color(red: 0.06, green: 0.08, blue: 0.02)
+                                        : Color.white.opacity(0.78)
+                                )
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, max(8, 7 * fontScale))
+                                .background(
+                                    interfaceFontScale == scale
+                                        ? accent
+                                        : Color.white.opacity(0.055),
+                                    in: RoundedRectangle(cornerRadius: 7, style: .continuous)
+                                )
+                                .overlay {
+                                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                                        .stroke(
+                                            interfaceFontScale == scale
+                                                ? accent
+                                                : Color.white.opacity(0.1),
+                                            lineWidth: 1
+                                        )
+                                }
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(isSettingsBusy)
+                        .accessibilityLabel("Размер шрифта \(scale.title)")
+                        .accessibilityAddTraits(
+                            interfaceFontScale == scale ? .isSelected : []
+                        )
+                    }
+                }
+                .padding(4)
+                .frame(maxWidth: .infinity)
+                .background(
+                    Color.black.opacity(0.28),
+                    in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+                )
+                .overlay {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .stroke(accent.opacity(0.2), lineWidth: 1)
+                }
+                .animation(.easeOut(duration: 0.14), value: interfaceFontScale)
+            }
+        }
+        .padding(13)
+        .background(Color.white.opacity(0.055))
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+
     private var eventSettingsSection: some View {
         VStack(alignment: .leading, spacing: 11) {
             Text("СОБЫТИЯ ДВИЖЕНИЯ")
-                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                .appFont(size: 10, weight: .bold, design: .monospaced)
                 .foregroundStyle(.white.opacity(0.54))
 
             HStack(spacing: 14) {
                 VStack(alignment: .leading, spacing: 3) {
                     Text("Распознавать движение")
-                        .font(.system(size: 13, weight: .semibold))
+                        .appFont(size: 13, weight: .semibold)
                     Text("Только в новых данных архива")
-                        .font(.system(size: 10))
+                        .appFont(size: 10)
                         .foregroundStyle(.white.opacity(0.5))
                 }
 
@@ -117,11 +203,12 @@ struct SettingsPanel: View {
                 Picker("Тип событий", selection: $motionEventRecordingMode) {
                     ForEach(MotionEventRecordingMode.allCases, id: \.self) { mode in
                         Text(mode.title).tag(mode)
+                            .appFont(size: 11, weight: .medium)
                     }
                 }
                 .labelsHidden()
                 .pickerStyle(.menu)
-                .frame(width: 164)
+                .frame(width: pickerWidth)
                 .disabled(!isMotionTrackingEnabled || isSettingsBusy)
             }
 
@@ -129,11 +216,12 @@ struct SettingsPanel: View {
                 Picker("Срок хранения", selection: $motionEventRetention) {
                     ForEach(MotionEventRetention.allCases, id: \.self) { retention in
                         Text(retention.title).tag(retention)
+                            .appFont(size: 11, weight: .medium)
                     }
                 }
                 .labelsHidden()
                 .pickerStyle(.menu)
-                .frame(width: 164)
+                .frame(width: pickerWidth)
                 .disabled(isSettingsBusy)
             }
 
@@ -159,7 +247,7 @@ struct SettingsPanel: View {
     ) -> some View {
         HStack(spacing: 12) {
             Text(title)
-                .font(.system(size: 12, weight: .semibold))
+                .appFont(size: 12, weight: .semibold)
             Spacer(minLength: 8)
             content()
         }
@@ -170,12 +258,15 @@ struct SettingsPanel: View {
             panelBackground.opacity(0.94)
 
             VStack(alignment: .leading, spacing: 14) {
-                Label("Очистить историю?", systemImage: "trash.fill")
-                    .font(.system(size: 15, weight: .bold))
+                HStack(spacing: 7) {
+                    Image(systemName: "trash.fill")
+                    Text("Очистить историю?")
+                        .appFont(size: 15, weight: .bold)
+                }
                     .foregroundStyle(Color(red: 1.0, green: 0.47, blue: 0.39))
 
                 Text("Удалить все события движения и их кадры? Архив камеры, кадры перемотки и скриншоты останутся без изменений.")
-                    .font(.system(size: 12))
+                    .appFont(size: 12)
                     .foregroundStyle(.white.opacity(0.72))
                     .fixedSize(horizontal: false, vertical: true)
 
@@ -195,7 +286,7 @@ struct SettingsPanel: View {
                 }
             }
             .padding(18)
-            .frame(width: 340)
+            .frame(width: 340 + ((fontScale - 1) * 150))
             .background(Color(red: 0.085, green: 0.095, blue: 0.102))
             .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
             .overlay {
@@ -210,17 +301,17 @@ struct SettingsPanel: View {
     private var storageSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("ХРАНЕНИЕ КАДРОВ И СОБЫТИЙ")
-                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                .appFont(size: 10, weight: .bold, design: .monospaced)
                 .foregroundStyle(.white.opacity(0.54))
 
             HStack(alignment: .center, spacing: 12) {
                 VStack(alignment: .leading, spacing: 5) {
                     Text(externalFolderURL == nil ? "Внутренняя папка MiniCam" : "Внешняя папка")
-                        .font(.system(size: 12, weight: .semibold))
+                        .appFont(size: 12, weight: .semibold)
 
                     if let externalFolderURL {
                         Text(externalFolderURL.path)
-                            .font(.system(size: 10, design: .monospaced))
+                            .appFont(size: 10, design: .monospaced)
                             .foregroundStyle(.white.opacity(0.52))
                             .lineLimit(2)
                             .truncationMode(.middle)
@@ -234,8 +325,12 @@ struct SettingsPanel: View {
                     .disabled(isSettingsBusy)
             }
 
-            Label(storageDescription, systemImage: storageSymbol)
-                .font(.system(size: 10, weight: .semibold))
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Image(systemName: storageSymbol)
+                Text(storageDescription)
+                    .appFont(size: 10, weight: .semibold)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
                 .foregroundStyle(storageColor)
 
             if externalFolderURL != nil {
@@ -244,7 +339,7 @@ struct SettingsPanel: View {
                     errorMessage = nil
                 }
                 .buttonStyle(.plain)
-                .font(.system(size: 10, weight: .semibold))
+                .appFont(size: 10, weight: .semibold)
                 .foregroundStyle(.white.opacity(0.62))
                 .disabled(isSettingsBusy)
             }
@@ -258,7 +353,7 @@ struct SettingsPanel: View {
         HStack(spacing: 9) {
             Spacer()
 
-            Button("Отмена", action: onCancel)
+            Button("Вернуться", action: cancel)
                 .buttonStyle(SettingsSecondaryButtonStyle())
                 .disabled(isSettingsBusy)
 
@@ -283,17 +378,17 @@ struct SettingsPanel: View {
     private var screenshotSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("СКРИНШОТЫ")
-                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                .appFont(size: 10, weight: .bold, design: .monospaced)
                 .foregroundStyle(.white.opacity(0.54))
 
             HStack(alignment: .center, spacing: 12) {
                 VStack(alignment: .leading, spacing: 5) {
                     Text(screenshotFolderURL == nil ? "Рабочий стол" : "Выбранная папка")
-                        .font(.system(size: 12, weight: .semibold))
+                        .appFont(size: 12, weight: .semibold)
 
                     if let screenshotFolderURL {
                         Text(screenshotFolderURL.path)
-                            .font(.system(size: 10, design: .monospaced))
+                            .appFont(size: 10, design: .monospaced)
                             .foregroundStyle(.white.opacity(0.52))
                             .lineLimit(2)
                             .truncationMode(.middle)
@@ -307,8 +402,12 @@ struct SettingsPanel: View {
                     .disabled(isSettingsBusy)
             }
 
-            Label(screenshotFolderDescription, systemImage: screenshotFolderSymbol)
-                .font(.system(size: 10, weight: .semibold))
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Image(systemName: screenshotFolderSymbol)
+                Text(screenshotFolderDescription)
+                    .appFont(size: 10, weight: .semibold)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
                 .foregroundStyle(screenshotFolderColor)
 
             if screenshotFolderURL != nil {
@@ -317,7 +416,7 @@ struct SettingsPanel: View {
                     errorMessage = nil
                 }
                 .buttonStyle(.plain)
-                .font(.system(size: 10, weight: .semibold))
+                .appFont(size: 10, weight: .semibold)
                 .foregroundStyle(.white.opacity(0.62))
                 .disabled(isSettingsBusy)
             }
@@ -376,7 +475,12 @@ struct SettingsPanel: View {
         container.isApplyingSettings || container.isClearingMotionEvents
     }
 
+    private var pickerWidth: CGFloat {
+        164 + ((fontScale - 1) * 80)
+    }
+
     private func loadDraft() {
+        interfaceFontScale = container.appSettings.interfaceFontScale
         isMotionTrackingEnabled = container.appSettings.isMotionTrackingEnabled
         motionEventRecordingMode = container.appSettings.motionEventRecordingMode
         motionEventRetention = container.appSettings.motionEventRetention
@@ -385,6 +489,11 @@ struct SettingsPanel: View {
         errorMessage = nil
         successMessage = nil
         isClearConfirmationPresented = false
+    }
+
+    private func cancel() {
+        container.cancelInterfaceFontScalePreview()
+        onCancel()
     }
 
     private func chooseFolder() {
@@ -440,6 +549,7 @@ struct SettingsPanel: View {
             do {
                 try await container.applySettings(
                     motionTrackingEnabled: isMotionTrackingEnabled,
+                    interfaceFontScale: interfaceFontScale,
                     motionEventRecordingMode: motionEventRecordingMode,
                     motionEventRetention: motionEventRetention,
                     externalFolderURL: externalFolderURL,
@@ -456,13 +566,14 @@ struct SettingsPanel: View {
 
 private struct SettingsDestructiveButtonStyle: ButtonStyle {
     @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.appFontScale) private var fontScale
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.system(size: 11, weight: .bold))
+            .appFont(size: 11, weight: .bold)
             .foregroundStyle(Color(red: 1.0, green: 0.52, blue: 0.46))
             .padding(.horizontal, 12)
-            .frame(height: 30)
+            .frame(minHeight: max(30, 15 * fontScale + 12))
             .background(
                 Color(red: 0.35, green: 0.12, blue: 0.11)
                     .opacity(configuration.isPressed ? 0.62 : 0.42)
@@ -478,13 +589,14 @@ private struct SettingsDestructiveButtonStyle: ButtonStyle {
 
 private struct SettingsSecondaryButtonStyle: ButtonStyle {
     @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.appFontScale) private var fontScale
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.system(size: 11, weight: .semibold))
+            .appFont(size: 11, weight: .semibold)
             .foregroundStyle(.white.opacity(configuration.isPressed ? 0.62 : 0.86))
             .padding(.horizontal, 12)
-            .frame(height: 30)
+            .frame(minHeight: max(30, 15 * fontScale + 12))
             .background(Color.white.opacity(configuration.isPressed ? 0.05 : 0.09))
             .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
             .opacity(isEnabled ? 1 : 0.42)
@@ -493,14 +605,15 @@ private struct SettingsSecondaryButtonStyle: ButtonStyle {
 
 private struct SettingsPrimaryButtonStyle: ButtonStyle {
     @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.appFontScale) private var fontScale
     let accent: Color
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.system(size: 11, weight: .bold))
+            .appFont(size: 11, weight: .bold)
             .foregroundStyle(Color(red: 0.06, green: 0.08, blue: 0.02))
             .padding(.horizontal, 14)
-            .frame(height: 30)
+            .frame(minHeight: max(30, 15 * fontScale + 12))
             .background(accent.opacity(configuration.isPressed ? 0.72 : 1))
             .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
             .opacity(isEnabled ? 1 : 0.42)

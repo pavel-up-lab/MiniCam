@@ -2,6 +2,25 @@
 
 All notable public changes to MiniCam are documented here.
 
+## [0.1.0-beta.2] - 2026-09-05
+
+Second public beta focused on interface accessibility and event navigation.
+
+### Added
+
+- Player interface text scaling at `1×`, `1.5×`, and `2×`, with immediate preview in Settings.
+- A persistent custom yellow scrollbar matching the motion-events panel design.
+
+### Changed
+
+- Dates, calendar labels, and timeline times now use an explicit Russian locale and 24-hour time.
+- Main playback and panel controls scale together with the selected text size.
+- The camera connection screen remains at its original size.
+
+### Fixed
+
+- The motion-events panel now preserves its scroll position when collapsed and when navigating to an event.
+
 ## [0.1.0-beta.1] - 2026-09-03
 
 First public beta.
