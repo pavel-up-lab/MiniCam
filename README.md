@@ -4,7 +4,7 @@
 
 MiniCam is a native macOS viewer for a single Hikvision-compatible IP camera. It combines a low-latency live view with a continuous timeline of recordings stored on the camera's microSD card.
 
-> **Beta software:** MiniCam has been tested with a limited set of hardware. Camera firmware and ISAPI implementations vary, so archive playback may not work with every model.
+> **Compatibility note:** MiniCam has been tested with a limited set of hardware. Camera firmware and ISAPI implementations vary, so archive playback may not work with every model.
 
 ## Features
 
@@ -34,12 +34,12 @@ Tested hardware: **Hikvision DS-2CD2043G2-IU**, channel 1, continuous microSD re
 
 ## Download and install
 
-1. Open the [`v0.1.0-beta.2` release](https://github.com/pavel-up-lab/MiniCam/releases/tag/v0.1.0-beta.2).
-2. Download `MiniCam-0.1.0-beta.2-macos-universal.zip` and optionally verify it with `SHA256SUMS.txt`.
+1. Open the [`v0.1.0` release](https://github.com/pavel-up-lab/MiniCam/releases/tag/v0.1.0).
+2. Download `MiniCam-0.1.0-macos-universal.zip` and optionally verify it with `SHA256SUMS.txt`.
 3. Unzip the download and move `MiniCam.app` to the Applications folder.
 4. Open MiniCam.
 
-The beta is ad-hoc signed but is **not notarized**, because the project does not currently have an Apple Developer ID certificate. If macOS blocks the first launch:
+The release is ad-hoc signed but is **not notarized**, because the project does not currently have an Apple Developer ID certificate. If macOS blocks the first launch:
 
 1. Try to open MiniCam once.
 2. Open **System Settings → Privacy & Security**.
@@ -85,6 +85,7 @@ Detection runs locally using a bundled YOLOX-Tiny Core ML model. Historical reco
 - The camera may permit only two simultaneous RTSP sessions. Extra viewers can cause `453 Not Enough Bandwidth`, a black picture, or a failed export.
 - Archive export is usually close to real time because many cameras deliver playback at recording speed.
 - Motion detection processes only new archive data received while MiniCam is running.
+- Archive playback on Intel Macs and under Rosetta retains the legacy frame scheduling path and may freeze or jump with some camera streams.
 - The build is not notarized and must be approved manually on first launch.
 
 ## Troubleshooting
@@ -121,7 +122,7 @@ pod install
 open MiniCam.xcworkspace
 ```
 
-Build the shared `MiniCam` scheme from the workspace, not directly from the Xcode project. The Core ML model and universal minimal FFmpeg executable used by the beta are tracked in the repository. Their reproducible conversion/build tools are available in [`Tools`](Tools/).
+Build the shared `MiniCam` scheme from the workspace, not directly from the Xcode project. The Core ML model and universal minimal FFmpeg executable used by the release are tracked in the repository. Their reproducible conversion/build tools are available in [`Tools`](Tools/).
 
 ## License
 

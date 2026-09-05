@@ -2,6 +2,22 @@
 
 All notable public changes to MiniCam are documented here.
 
+## [0.1.0] - 2026-09-05
+
+First stable release.
+
+### Changed
+
+- Apple Silicon archive playback now uses RTSP over TCP and a frame policy that
+  prevents reverse image jumps while reducing visible freezes.
+- Intel Macs retain the previous archive playback path.
+
+### Verified
+
+- Universal `arm64` and `x86_64` application, VLCKit, and FFmpeg binaries.
+- Native Apple Silicon playback and Rosetta launch on macOS.
+- Minimum supported system remains macOS Monterey 12.
+
 ## [0.1.0-beta.2] - 2026-09-05
 
 Second public beta focused on interface accessibility and event navigation.

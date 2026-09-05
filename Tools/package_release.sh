@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-VERSION="${1:-0.1.0-beta.2}"
+VERSION="${1:-0.1.0}"
 PROJECT_ROOT="${0:A:h:h}"
 APP_PATH="${2:-${PROJECT_ROOT}/build-release/Build/Products/Release/MiniCam.app}"
 OUTPUT_ROOT="${PROJECT_ROOT}/release"
